@@ -1,0 +1,153 @@
+defaults:
+  - data: all
+  - model: prose
+  - optim: adamw
+  - symbol: symbol
+  - _self_
+  - override hydra/hydra_logging: none
+  - override hydra/job_logging: none
+
+  
+### Debug
+debug: 0
+dryrun: 0
+
+
+### data
+
+# Length of the input sequence
+input_len: 32
+input_step: 2
+
+output_step: 2
+# num of training data in total
+train_size: 51200
+# num of training data in actual training, < train_size, get from num of train_size data
+train_size_get: -1
+# Add additional noise to data (0 to disable)
+noise: 0.02
+
+# Type of noise added (select from [additive, multiplicative])
+noise_type: additive
+
+
+IC_per_param: 50
+
+separate_modality: True
+
+### Model
+
+# Use torch.compile to speed up
+compile: 0
+
+
+
+### Training
+
+num_workers: 8
+batch_size: 512
+max_epoch: 30
+n_steps_per_epoch: 2000
+
+# Save the model periodically (0 to disable)
+save_periodic: 5
+
+# Log stats periodically (0 to disable)
+log_periodic: 100
+
+# Print every n steps
+print_freq: 1000
+
+# Use AMP wrapper for mixed precision / gradient accumulation
+amp: 1
+
+# Accumulate model gradients over N iterations (N times larger batch sizes)
+accumulate_gradients: 1
+
+# # Clip gradients norm (0 to disable)
+clip_grad_norm: 1.0
+
+
+# Reweight data loss, select from [none(mse), l2, linfty]
+loss_weight: none
+
+# normalize input data for model
+normalize: 1
+
+
+### evaluate
+
+# Size of test samples (-1 for everything)
+eval_size: 40000
+eval_size_get: -1
+eval_support_size: 10
+# Batch size for evaluation (if null, set to 1.5*batch_size)
+batch_size_eval: 512
+
+# Only run evaluations
+eval_only: 0
+
+# Path of experiment to use
+eval_from_exp: ""
+# Print/graph all outputs
+print_outputs: 0
+
+# Log evaluation plots for each epoch, each type (-1 to disable)
+log_eval_plots: -1
+
+# Metrics for early stopping/model selection
+validation_metrics: _l2_error
+
+# Metrics to report (select from _mse, _rmse, _l2_error, _l2_error_first_half, _l2_error_second_half)
+validation_metrics_print: _l2_error,_l2_error_first_half,_l2_error_second_half
+
+# Reload a pretrained model
+reload_model: null
+
+# Reload a pretrained model
+reload_ftmodel: null
+
+# Reload a pretrained model
+reload_checkpoint: null
+
+
+### experiment & logging names
+exp_name: debug
+exp_id: run1
+
+use_wandb: 1
+wandb:
+  project: null
+  # entity: null
+  entity: schaefferlab1
+  notes: null
+  name: null
+  id: ${..exp_id}
+  log_per_type: true
+
+# Seed (-1 to use timestamp)
+base_seed: 10086
+test_seed: 42
+
+# Saves
+dump_path: null
+eval_dump_path: null
+
+## CPU / Multi-GPU / Multi-Nodes
+cpu: 0
+world_size: ???
+global_rank: ???
+local_rank: ???
+n_gpu_per_node: ???
+n_nodes: ???
+node_id: ???
+is_master: ???
+multi_node: ???
+multi_gpu: ???
+
+command: null
+
+hydra:  
+  output_subdir: null
+  run:  
+    dir: .

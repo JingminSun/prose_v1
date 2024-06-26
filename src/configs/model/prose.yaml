@@ -1,0 +1,64 @@
+name: prose_freezed_data
+
+# shared attributes
+dim_emb: 512
+dim_ffn: 2048
+n_head: 8
+dropout: 0
+norm_first: true
+
+patch_num: 1 # number of patches per dimension
+
+
+embedder:
+    dim: ${..dim_emb}
+    patch_num: ${..patch_num}
+
+data_encoder:
+    n_layer: 2
+    positional_embedding: null
+    dim_emb: ${..dim_emb}
+    dim_ffn: ${..dim_ffn}
+    n_head: ${..n_head}
+    dropout: ${..dropout}
+    norm_first: ${..norm_first}
+    
+symbol_encoder:
+    n_layer: 4
+    positional_embedding: sinusoidal
+    dim_emb: ${..dim_emb}
+    dim_ffn: ${..dim_ffn}
+    n_head: ${..n_head}
+    dropout: ${..dropout}
+    norm_first: ${..norm_first}
+    
+fusion:
+    n_layer: 8
+    type_embeddings: true
+    dim_emb: ${..dim_emb}
+    dim_ffn: ${..dim_ffn}
+    n_head: ${..n_head}
+    dropout: ${..dropout}
+    norm_first: ${..norm_first}
+    
+data_decoder:
+    n_layer: 8
+    query_dim: 1 # time: 1, space: 2
+    dim_emb: ${..dim_emb}
+    dim_ffn: ${..dim_ffn}
+    n_head: ${..n_head}
+    dropout: ${..dropout}
+    norm_first: ${..norm_first}
+    patch_num: ${..patch_num}
+    
+symbol_decoder:
+     n_layer: 8
+     positional_embedding: sinusoidal
+     share_inout_emb: true
+     kv_cache: true
+     dim_emb: ${..dim_emb}
+     dim_ffn: ${..dim_ffn}
+     n_head: ${..n_head}
+     dropout: ${..dropout}
+     norm_first: ${..norm_first}
+    

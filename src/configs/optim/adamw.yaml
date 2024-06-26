@@ -1,0 +1,11 @@
+type: adamw
+
+lr: 1e-4
+weight_decay: 1e-4
+eps: 1e-6
+amsgrad: false
+
+# scheduler, choose from [cosine, inverse_sqrt] 
+scheduler_type: cosine
+warmup: 0.1
+max_iters: ???

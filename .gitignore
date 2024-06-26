@@ -1,0 +1,11 @@
+checkpoint/
+dataset/
+wandb/
+__pycache__/
+*.pyc
+.idea/
+*.ipynb
+figures/
+.DS_Store
+scripts/
+misc/

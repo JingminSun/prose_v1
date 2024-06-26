@@ -1,0 +1,4 @@
+type: adam_inverse_sqrt,warmup_updates=20000,weight_decay=0.0001
+# type: adam_cosine,warmup_updates=1000
+
+lr: 1e-4
