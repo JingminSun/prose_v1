@@ -238,17 +238,22 @@ class DataOperatorDecoder(nn.Module):
         self.dim = config.dim_emb
 
         self.time_proj = nn.Sequential(
-            nn.Linear(config.query_dim, self.dim),
+            nn.Linear(config.query_dim.time, self.dim),
             nn.GELU(),
             nn.Linear(self.dim, self.dim),
             # nn.GELU(),
             # nn.LayerNorm(self.dim),
         )
 
-        # self.patch_position_embeddings = nn.Parameter(
-        #     (self.dim**-0.5) * torch.randn(1, 1, config.patch_num * config.patch_num, self.dim)
-        # )
-        self.patch_position_embeddings = nn.Parameter(torch.randn(1, 1, config.patch_num * config.patch_num, self.dim))
+        self.space_proj = nn.Sequential(
+            nn.Linear(config.query_dim.space, self.dim),
+            nn.GELU(),
+            nn.Linear(self.dim, self.dim),
+            # nn.GELU(),
+            # nn.LayerNorm(self.dim),
+        )
+
+        self.patch_position_embeddings = nn.Parameter(torch.randn(1, 1, config.patch_num, self.dim))
 
         self.transformer_decoder = nn.TransformerDecoder(
             OperatorDecoderLayer(
@@ -264,26 +269,32 @@ class DataOperatorDecoder(nn.Module):
             norm=nn.LayerNorm(config.dim_emb) if config.norm_first else None,
         )
 
-    def get_query_emb(self, times):
+    def get_query_emb(self, times,query_space_grid = None):
         """
         Input:
             times:     Tensor (bs, output_len, 1)
+            space:     Tensor (bs, output_x_len, 1)
         Output:
             query_emb: Tensor (bs, query_len, dim)
-                       query_len = output_len * patch_num * patch_num
+                       query_len = output_len * patch_num
         """
 
         bs, output_len, query_dim = times.size()
 
         times = self.time_proj(times)[:, :, None]  # (bs, output_len, 1, dim)
-        # patches = self.patch_position_embeddings[None, None, :, :]  # (1, 1, p*p, dim)
-
-        return (times + self.patch_position_embeddings).reshape(bs, -1, self.dim)
+        if query_space_grid is not None:
+            space = self.space_proj(query_space_grid)[:, :, None]  # (bs, output_len, 1, dim)
+            space = space.reshape(bs, 1,-1, self.dim)
+            times = times.expand(-1,-1,space.shape[2],-1)
+            space = space.expand(-1,times.shape[1],-1,-1)
+            return (times + space).reshape(bs, -1, self.dim)
+        else:
+            return (times + self.patch_position_embeddings).reshape(bs, -1, self.dim)
 
     def forward(self, src, query_emb, src_key_padding_mask=None):
         """
         src:         Tensor (bs, src_len, dim)
-        query_emb:   Tensor (bs, query_len, dim)
+        query_emb:   Tensor (bs, query_len_t * query_len_x, dim)
         src_key_padding_mask: Optional[Tensor] (bs, src_len)
         """
 

@@ -160,12 +160,13 @@ class LinearEmbedder_1DPDE(nn.Module):
     Preprocess data (break into patches) and embed them into target dimension.
     """
 
-    def __init__(self, config, x_num, data_dim):
+    def __init__(self, config, x_num, data_dim, full_tx = False):
         super().__init__()
         self.config = config
 
         self.dim = config.dim
         self.data_dim = data_dim
+        self.full_tx = full_tx
 
         assert x_num % config.patch_num == 0, "x_num must be divisible by patch_num"
         self.patch_resolution = x_num // config.patch_num  # resolution of one space dimension for each patch
@@ -186,8 +187,11 @@ class LinearEmbedder_1DPDE(nn.Module):
         )
 
         # for decoder part
-
-        self.post_proj = nn.Sequential(nn.Linear(self.dim, self.dim), nn.GELU(), nn.Linear(self.dim, self.patch_dim))
+        if self.full_tx:
+            self.post_proj = nn.Sequential(nn.Linear(self.dim, self.dim), nn.GELU(),
+                                           nn.Linear(self.dim, 1))
+        else:
+            self.post_proj = nn.Sequential(nn.Linear(self.dim, self.dim), nn.GELU(), nn.Linear(self.dim, self.patch_dim))
 
     def encode(self, data, times):
         """
@@ -215,20 +219,23 @@ class LinearEmbedder_1DPDE(nn.Module):
             data_output:     Tensor (bs, query_len, dim)
                              query_len = output_len * patch_num
         Output:
-            data_output:     Tensor (bs, output_len, x_num, x_num, data_dim)
+            data_output:     Tensor (bs, output_len, x_num, data_dim)
         """
         bs = data_output.size(0)
 
         data_output = self.post_proj(data_output)  # (bs, query_len, patch_dim)
-        data_output = data_output.view(
-            bs, -1, self.config.patch_num, self.patch_dim
-        )  # (bs, output_len, p, patch_dim)
+        if self.full_tx:
+            return data_output
+        else:
+            data_output = data_output.view(
+                bs, -1, self.config.patch_num, self.patch_dim
+            )  # (bs, output_len, p, patch_dim)
 
-        data_output = depatchify_1D(
-            data_output, self.config.patch_num, self.patch_resolution, self.data_dim
-        )  # (bs, output_len, x_num, data_dim)
+            data_output = depatchify_1D(
+                data_output, self.config.patch_num, self.patch_resolution, self.data_dim
+            )  # (bs, output_len, x_num, data_dim)
 
-        return data_output
+            return data_output
 
 class LinearEmbedder_1DPDE_encode(nn.Module):
     """

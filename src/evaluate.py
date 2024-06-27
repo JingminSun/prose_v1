@@ -14,7 +14,6 @@ from utils.plot import plot_2d_pde, plot_1d_pde
 from data_utils.collate import custom_collate
 from tabulate import tabulate
 from utils.misc import to_cuda
-from models.transformer_wrappers import Combine_freeze_data,Combine_freeze_symbol
 import wandb
 # np.seterr(all="raise")
 np.seterr(divide="raise", under="ignore", over="raise", invalid="raise")
@@ -114,6 +113,7 @@ class Evaluator(object):
                         input_times=dict["input_times"][..., None],
                         output_times=dict["output_times"][..., None],
                         symbol_input=dict["symbol_input"],
+                        query_space_grid=dict["spatial_grid"][..., None] if params.model.data_decoder.full_tx else None,
                         symbol_padding_mask=dict["symbol_mask"]
                     )  # (bs, output_len, x_num, x_num, data_dim)
                     data_output = output_dict["data_output"]

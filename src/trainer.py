@@ -366,6 +366,7 @@ class Trainer(object):
         data = samples["data"]
         data_mask = samples["data_mask"][:, None, None, :]  # (bs, 1, 1, dim)
         t = samples["t"]
+        x = samples["x"]
         symbol = samples["tree_encoded"]
 
         symbol_input = symbol[:,1:-1] # Deleting EOS/BOS
@@ -384,9 +385,10 @@ class Trainer(object):
         data_label = data[:, output_start::output_step]  # (bs, output_len, x_num,  dim)
         input_times = t[:, :input_len:input_step]  # (bs, input_len)
         output_times = t[:, output_start::output_step]  # (bs, output_len)
+        spatial_grid = x
 
-        data_input, data_label, input_times, output_times, data_mask, symbol_input, symbol_mask = to_cuda(
-            (data_input, data_label, input_times, output_times, data_mask, symbol_input, symbol_mask)
+        data_input, data_label, input_times, output_times, data_mask, symbol_input, symbol_mask, spatial_grid = to_cuda(
+            (data_input, data_label, input_times, output_times, data_mask, symbol_input, symbol_mask,spatial_grid)
         )
 
         if self.params.normalize:
@@ -431,7 +433,8 @@ class Trainer(object):
             "data_mask": data_mask,
             "loss_weight": loss_weight,
             "symbol_input": symbol_input,
-            "symbol_mask": symbol_mask
+            "symbol_mask": symbol_mask,
+            "spatial_grid": spatial_grid
         }
 
         return dict
@@ -475,6 +478,7 @@ class Trainer(object):
                 input_times=dict["input_times"][..., None],
                 output_times=dict["output_times"][..., None],
                 symbol_input=dict["symbol_input"],
+                query_space_grid = dict["spatial_grid"][..., None] if params.model.data_decoder.full_tx else None,
                 symbol_padding_mask=dict["symbol_mask"],
             )  # (bs, output_len, x_num, data_dim)
             data_output = output["data_output"]

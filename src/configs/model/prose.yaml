@@ -43,7 +43,10 @@ fusion:
     
 data_decoder:
     n_layer: 8
-    query_dim: 1 # time: 1, space: 2
+    full_tx: true
+    query_dim:
+       time: 1
+       space: 1
     dim_emb: ${..dim_emb}
     dim_ffn: ${..dim_ffn}
     n_head: ${..n_head}
