@@ -14,15 +14,8 @@ x_range:
 directory: /home/shared/prose/sep_types
 eval_data: null
 train_data: null
-num_support: 10
-num_query: 20
 
 
-#random_start: # randomly select the time starting idx
-#  train: false
-#  val: false
-#  test: false
-#
 burgers:
   dim: 1
 

@@ -9,3 +9,4 @@ figures/
 .DS_Store
 scripts/
 misc/
+/src/outputs

@@ -42,8 +42,6 @@ class MultiPDE(Dataset):
         self.symbol_env = symbol_env
         self.split = split
         self.IC_per_param = params.IC_per_param
-        self.num_support = params.data.num_support
-        self.num_query = params.data.num_query
         self.skip = skip
         if types is not None:
             self.types = types
@@ -271,8 +269,6 @@ if __name__ == "__main__":
         print_sample(data2)
         print_sample(next(data_iter))
 
-        params.data.num_support = 0
-        params.data.num_query = 30
         dataset = MultiPDE(params, symbol_env, split="train")
         print(dataset.__len__())
         loader = DataLoader(

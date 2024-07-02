@@ -72,7 +72,7 @@ class Evaluator(object):
 
         self.validation_metrics = self.params.validation_metrics_print.split(",")
 
-    @torch.enable_grad()
+    @torch.no_grad()
     def evaluate(self):
 
         params = self.params
