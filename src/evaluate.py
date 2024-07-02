@@ -102,7 +102,7 @@ class Evaluator(object):
                 bs = len(samples["data"])
                 eval_size += bs
                 dict = (
-                    self.trainer.prepare_data(samples)
+                    self.trainer.prepare_data(samples,train=False)
                 )
 
                 data_label = dict["data_label"]
