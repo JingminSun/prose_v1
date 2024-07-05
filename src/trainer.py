@@ -300,7 +300,7 @@ class Trainer(object):
         if not self.params.is_master:
             return
         for metric, biggest in self.metrics:
-            _metric = metric + "_zero_shot"
+            _metric = metric
             if prefix is not None:
                 _metric = prefix + "_" + _metric
             if suffix is not None:

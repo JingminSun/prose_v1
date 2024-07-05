@@ -167,7 +167,7 @@ def main(params: DictConfig):
             if params.wandb.log_per_type:
                 for type, results in results_per_type.items():
                     wandb_log["val"][type] = {
-                        k.strip("_"): v for k, v in results.items() if k in ["_l2_error_zero_shot", "data_loss_zero_shot","_l2_error_few_shot", "data_loss_few_shot"]
+                        k.strip("_"): v for k, v in results.items() if k in ["_l2_error", "data_loss"]
                     }
             wandb.log(wandb_log)
 

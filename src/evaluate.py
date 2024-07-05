@@ -153,8 +153,8 @@ class Evaluator(object):
 
 
                         plot_1d_pde(
-                            data_loss_zero_shot[i],
-                            data_loss_few_shot[i] if data_loss_few_shot is not None else None,
+                            data_loss[i],
+                            None,
                             samples["t"][i],
                             samples["x"][i],
                             data_all[i],
@@ -175,11 +175,10 @@ class Evaluator(object):
                     cur_data = data_all[0]
 
                     index = idx * params.batch_size_eval
-                    plot_title = "Type {} | Idx {} | zero {:.4f} ".format(type,index,cur_result_zero_shot[ "_l2_error"][ 0])
+                    plot_title = "Type {} | Idx {} | zero {:.4f} ".format(type,index,cur_result[ "_l2_error"][ 0])
                     path = plot_1d_pde(
                         output_zero_shot,
                         None,
-                        output_few_shot if output_few_shot is not None else None,
                         samples["t"][0],
                         samples["x"][0],
                         cur_data,
