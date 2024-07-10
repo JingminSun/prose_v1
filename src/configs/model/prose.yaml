@@ -1,5 +1,4 @@
-name: prose_freezed_data
-
+name: prose
 # shared attributes
 dim_emb: 512
 dim_ffn: 2048
