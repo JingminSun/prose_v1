@@ -269,7 +269,7 @@ class DataOperatorDecoder(nn.Module):
             norm=nn.LayerNorm(config.dim_emb) if config.norm_first else None,
         )
 
-    def get_query_emb(self, times,query_space_grid = None):
+    def get_query_emb(self, times, query_space_grid=None):
         """
         Input:
             times:     Tensor (bs, output_len, 1)
@@ -284,9 +284,9 @@ class DataOperatorDecoder(nn.Module):
         times = self.time_proj(times)[:, :, None]  # (bs, output_len, 1, dim)
         if query_space_grid is not None:
             space = self.space_proj(query_space_grid)[:, :, None]  # (bs, output_len, 1, dim)
-            space = space.reshape(bs, 1,-1, self.dim)
-            times = times.expand(-1,-1,space.shape[2],-1)
-            space = space.expand(-1,times.shape[1],-1,-1)
+            space = space.reshape(bs, 1, -1, self.dim)
+            times = times.expand(-1, -1, space.shape[2], -1)
+            space = space.expand(-1, times.shape[1], -1, -1)
             return (times + space).reshape(bs, -1, self.dim)
         else:
             return (times + self.patch_position_embeddings).reshape(bs, -1, self.dim)
@@ -505,111 +505,48 @@ class TransformerSymbolDecoder(nn.Module):
         loss = F.cross_entropy(scores.float(), y, reduction="mean")
         return scores, loss
 
-    '''
-    ## TODO: merge two generate functions
-
-    def generate(
-        self,
-        encoded,
-        initial,
-        output_times,
-        pre_proj,
-    ):
+    def generate(self, memory, memory_key_padding_mask=None, max_len=200, sample_temperature=None):
+        # TODO: test new generate
         """
         For evaluation/testing only.
         Inputs:
-            encoded:      Tensor (input_len, bs, dim)
-            initial:      Tensor (bs, query_dim+data_dim)
-            output_times: Tensor (output_len, query_dim)
-            pre_proj:     Projection for data input
+            memory:                  Tensor (bs, memory_len, dim)
+            memory_key_padding_mask: Optional[BoolTensor] (bs, memory_len)
         Output:
-            data_output:  Tensor (output_len, bs, data_dim)
+            generated:               LongTensor(bs, cur_len)
+                                     e.g. <BOS> W1 W2 W3 <EOS> <PAD>
+                                          <BOS> W1 W2 W3   W4  <EOS>
+            gen_len:                 LongTensor(bs)
+                                     e.g. [5, 6]
 
         """
-        cur_len = 1
-        output_len = output_times.size(0)
-        bs = initial.size(0)
-        query_dim = output_times.size(1)
-        data_dim = initial.size(1) - query_dim
-        generated = torch.zeros(output_len, bs, data_dim, dtype=initial.dtype, device=initial.device)
-
-        cache = None
-        tgt = pre_proj(initial)[None]  # (1, bs, dim)
-
-        # generation loop
-        while cur_len <= output_len:  # max length of generation
-
-            if self.config.kv_cache:
-                decoded, cache = self.transformer_decoder(tgt=tgt, memory=encoded, cache=cache)  # (cur_len, bs, dim)
-            else:
-                tgt_mask = nn.Transformer.generate_square_subsequent_mask(tgt.size(0), tgt.device)
-                decoded = self.transformer_decoder(tgt=tgt, memory=encoded, tgt_mask=tgt_mask)  # (cur_len, bs, dim)
-
-            new_data = self.post_proj(decoded[-1])  # (bs, data_dim)
-
-            generated[cur_len - 1] = new_data
-
-            new_input = torch.cat(
-                [output_times[cur_len - 1][None].expand(bs, query_dim), new_data], dim=1
-            )  # (bs, query_dim + data_dim)
-
-            tgt = torch.cat([tgt, pre_proj(new_input[None])], dim=0)  # (cur_len + 1, bs, dim)
-
-            cur_len += 1
-
-        return generated
-
-    def generate(self, src_enc, src_len, max_len=200, top_p=1.0, sample_temperature=None):
-        """
-        Decode a sentence given initial start.
-        Inputs:
-            src_end     (bs, slen, dim) fused features
-            src_len     tuple of data and text lengths
-        Outputs:
-            x           LongTensor(bs, slen)
-                            <BOS> W1 W2 W3 <EOS> <PAD>
-                            <BOS> W1 W2 W3   W4  <EOS>
-            lengths     LongTensor(bs)
-                            [5, 6]
-        """
-
-        # input batch
-        data_len, text_len = src_len[0], src_len[1]  # (bs, )
-        bs = data_len.size(0)
-        assert src_enc.size(0) == bs
+        bs = memory.size(1)
+        memory = memory.transpose(0, 1)  # (memory_len, bs, dim)
 
         # generated sentences
-        generated = text_len.new(max_len, bs)  # upcoming output
-        generated.fill_(self.pad_index)  # fill upcoming ouput with <PAD>
-        generated[0].fill_(self.bos_index)  # we use <EOS> for <BOS> everywhere
-
-        # positions
-        positions = text_len.new(max_len).long()
-        positions = torch.arange(max_len, out=positions).unsqueeze(1).expand(max_len, bs)
+        generated = torch.full((max_len, bs), self.pad_index, dtype=torch.long, device=memory.device)
+        generated[0].fill_(self.bos_index)
 
         # current position / max lengths / length of generated sentences / unfinished sentences
+        cache = None
         cur_len = 1
-        gen_len = text_len.clone().fill_(1)  # (bs, )
-        unfinished_sents = text_len.clone().fill_(1)
+        gen_len = torch.ones(bs, dtype=torch.long, device=memory.device)  # (bs, )
+        unfinished_sents = torch.ones(bs, dtype=torch.long, device=memory.device)  # (bs, )
 
-        # cache compute states
-        self.cache = {"slen": 0}
-        while cur_len < max_len:
-            # compute word scores
-            tensor = self.forward(
-                "fwd",
-                x=generated[:cur_len],  # (cur_len, bs)
-                lengths=gen_len,
-                positions=positions[:cur_len],
-                causal=True,
-                src_enc=src_enc,
-                src_len=src_len,
-                use_cache=True,
-            )
-            # assert tensor.size() == (cur_len, bs, self.dim)
+        # generation loop
+        while cur_len < max_len:  # max length of generation
+            tgt = generated[:cur_len]  # (cur_len, bs)
+            if self.config.kv_cache:
+                decoded, cache = self.transformer_decoder(
+                    tgt=tgt, memory=memory, memory_key_padding_mask=memory_key_padding_mask, cache=cache
+                )  # (cur_len, bs, dim)
+            else:
+                tgt_mask = nn.Transformer.generate_square_subsequent_mask(tgt.size(0), tgt.device)
+                decoded = self.transformer_decoder(
+                    tgt=tgt, memory=memory, tgt_mask=tgt_mask, memory_key_padding_mask=memory_key_padding_mask
+                )  # (cur_len, bs, dim)
 
-            tensor = tensor.data[-1, :, :].to(self.dtype)  # (bs, dim)  ##BE CAREFUL
-            scores = self.proj(tensor)  # (bs, n_words)
+            scores = self.proj(decoded[-1])  # (bs, n_words)
 
             # select next words: sample or greedy
             if sample_temperature is None:
@@ -618,7 +555,7 @@ class TransformerSymbolDecoder(nn.Module):
                 next_words = torch.multinomial(
                     F.softmax(scores.float() / sample_temperature, dim=1), num_samples=1
                 ).squeeze(1)
-            assert next_words.size() == (bs,)
+            # assert next_words.size() == (bs,)
 
             # update generations / lengths / finished sentences / current length
             generated[cur_len] = next_words * unfinished_sents + self.pad_index * (1 - unfinished_sents)
@@ -633,11 +570,8 @@ class TransformerSymbolDecoder(nn.Module):
         # add <EOS> to unfinished sentences
         if cur_len == max_len:
             generated[-1].masked_fill_(unfinished_sents.bool(), self.eos_index)
-        # sanity check
-        # assert (generated == self.eos_index).sum() == 2 * bs
-        generated = generated.unsqueeze(-1).view(generated.shape[0], bs)
-        return generated[:cur_len], gen_len
-    '''
+        generated = generated[:cur_len].transpose(0, 1)  # (bs, cur_len)
+        return generated, gen_len
 
 
 """
