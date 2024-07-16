@@ -36,7 +36,7 @@ def main(params: DictConfig):
         params.log_periodic = 1
         if not params.batch_size_eval:
             params.batch_size_eval = 64
-        params.eval_size = params.batch_size_eval * 2
+        # params.eval_size = params.batch_size_eval * 2
 
     if params.eval_only:
         assert params.eval_from_exp is not None and params.eval_from_exp != ""
