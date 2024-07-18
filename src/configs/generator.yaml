@@ -20,3 +20,8 @@ separate_modality: True
 debugging: true
 
 generating_mode: 1
+
+hydra:  
+  output_subdir: null
+  run:  
+    dir: .
