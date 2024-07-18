@@ -1,0 +1,22 @@
+defaults:
+  - data: generate_pde
+  - symbol: symbol
+  - _self_
+  - override hydra/hydra_logging: none
+  - override hydra/job_logging: none
+
+directory: dataset/
+file_name: null
+size: 1000
+seed: -1
+
+batch_size: 256
+num_workers: 12
+
+IC_per_param: 50
+
+separate_modality: True
+
+debugging: true
+
+generating_mode: 1

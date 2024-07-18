@@ -1,0 +1,7 @@
+- num_workers=0
+- IC_per_param=1024
+- data.param_range_gamma=0.3
+- data.types=burgers
+- size=1024
+- directory=/s1/shared/dataset/prosepde
+- file_name=ood0.3_1

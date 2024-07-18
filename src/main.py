@@ -107,7 +107,7 @@ def main(params: DictConfig):
         if not os.path.isdir(params.eval_dump_path):
             os.makedirs(params.eval_dump_path)
 
-    symbol_env = SymbolicEnvironment(params.symbol)
+    symbol_env = SymbolicEnvironment(params)
     modules = build_model(params, params.model, params.data, symbol_env)
     trainer = Trainer(modules, params, symbol_env)
     evaluator = Evaluator(trainer, symbol_env)

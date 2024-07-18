@@ -11,7 +11,7 @@ defaults:
 ### Debug
 debug: 0
 dryrun: 0
-
+generating_mode: 0
 
 ### data
 

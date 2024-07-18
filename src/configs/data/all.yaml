@@ -1,5 +1,8 @@
 train_types: -1
 eval_types: -1
+min_input_dimension: 1
+min_output_dimension: 1
+max_input_dimension: 1
 max_output_dimension: 1
 t_num: 64
 x_num: 128
@@ -10,7 +13,7 @@ x_range:
   - 0
   - 2
 
-
+space_dim: 1
 directory: /home/shared/prose/sep_types
 eval_data: null
 train_data: null

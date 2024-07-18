@@ -1,0 +1,6 @@
+- num_workers=12
+- IC_per_param=50
+- data.param_range_gamma=0.1
+- data.types=inviscid_conservation_cubicflux
+- size=10240
+- directory=/s1/shared/dataset/prosepde

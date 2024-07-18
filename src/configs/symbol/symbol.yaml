@@ -19,7 +19,7 @@ max_exponent: 10
 # Maximal order of magnitude in prefactors
 max_exponent_prefactor: 1
 
-max_input_dimension: 1
-max_output_dimension: 1
-
 n_words: -1
+
+noisy_text_input: false
+

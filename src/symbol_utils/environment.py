@@ -1,6 +1,8 @@
 from logging import getLogger
 import numpy as np
-import symbol_utils.generators as generators
+from .data_generators import RandomFunctions
+from collections import defaultdict
+
 import torch
 
 SPECIAL_WORDS = [
@@ -24,15 +26,15 @@ class SymbolicEnvironment:
         self.params = params
         self.rng = None
         self.seed = None
-        self.float_precision = params.float_precision
-        self.mantissa_len = params.mantissa_len
+        self.float_precision = params.symbol.float_precision
+        self.mantissa_len = params.symbol.mantissa_len
         self.max_size = None
-        self.output_dim = params.max_output_dimension
-        self.float_tolerance = 10 ** (-params.float_precision)
-        self.additional_tolerance = [10 ** (-i) for i in range(params.float_precision + 1)]
-        assert (params.float_precision + 1) % params.mantissa_len == 0, "Bad precision/mantissa len ratio"
+        self.output_dim = params.data.max_output_dimension
+        self.float_tolerance = 10 ** (-params.symbol.float_precision)
+        self.additional_tolerance = [10 ** (-i) for i in range(params.symbol.float_precision + 1)]
+        assert (params.symbol.float_precision + 1) % params.symbol.mantissa_len == 0, "Bad precision/mantissa len ratio"
 
-        self.generator = generators.RandomFunctions(params, SPECIAL_WORDS)
+        self.generator = RandomFunctions(params, SPECIAL_WORDS)
         self.float_encoder = self.generator.float_encoder
         self.float_words = self.generator.float_words
         self.equation_encoder = self.generator.equation_encoder
@@ -47,7 +49,7 @@ class SymbolicEnvironment:
 
         assert len(self.float_words) == len(set(self.float_words))
         assert len(self.equation_word2id) == len(set(self.equation_word2id))
-        self.n_words = params.n_words = len(self.equation_words)
+        self.n_words = params.symbol.n_words = len(self.equation_words)
         logger.info(f"vocabulary: {len(self.float_word2id)} float words, {len(self.equation_word2id)} equation words")
 
     def word_to_idx(self, words, float_input=True):
@@ -81,118 +83,35 @@ class SymbolicEnvironment:
             idx_to_words = [self.equation_id2word[int(term)] for term in lst]
         return self.word_to_infix(idx_to_words, is_float, str_array)
 
-    ''' # Not needed, only kept for reference
+    def gen_expr(self,rng):
+        errors = defaultdict(int)
+        while True:
+            try:
+                expr, error = self._gen_expr(rng)
+                if error:
+                    errors[error[0]] += 1
+                    assert False
+                return expr, errors
+            except:
+                if self.params.debugging:
+                    print(error)
+                continue
 
-    def batch_data_operator(self, data, t_eval, step=1, dims=None):
-        """
-        Batch list of data into a Tensor ready for operator data decoder
-        Outputs:
-            data_input   (input_len, bs, output_dim+1)
-            data_label   (data_len, bs, output_dim)
-            lengths      (bs, )
-            dims         (bs, )
-        """
-        length = t_eval.size(0)
-        input_len = self.params.input_len // step
-        lengths = torch.LongTensor([input_len for _ in data])
-        if dims is None:
-            dims = torch.LongTensor([eq.size(-1) for eq in data])
-        else:
-            dims = torch.LongTensor(dims)
+    def _gen_expr(self,rng):
+        item = self.generator.generate_one_sample(rng)
 
-        data_input = torch.zeros(input_len, len(data), self.output_dim + 1, dtype=t_eval.dtype)
-        data_label = torch.zeros(length, len(data), self.output_dim, dtype=t_eval.dtype)
+        tree = item["tree"]
 
-        t_input = t_eval[0 : self.params.input_len : step]
+        if len(item["data"]) == 0:
+            return item, ["data generation error"]
 
-        for i, eq in enumerate(data):
-            data_input[:, i, 0].copy_(t_input)
-            data_input[:, i, 1 : (dims[i] + 1)].copy_(eq[0 : self.params.input_len : step, : dims[i]])
-            data_label[:, i, : dims[i]].copy_(eq[..., dims[i]])
+        if "tree_encoded" not in item:
+            tree_encoded = self.equation_encoder.encode(tree)
+            assert all([x in self.equation_word2id for x in tree_encoded]), "tree: {}\n encoded: {}".format(
+                tree, tree_encoded
+            )
 
-        return data_input, data_label, lengths, dims
+            item["tree_encoded"] = tree_encoded
 
-    def get_tx_grid(self, t_grid, x_grid, space_dim, x_grid_size):
-        """
-        Generate tx_grid based on spacial and temporal grids
-        Inputs:
-            t_grid       (t_num, )
-            x_grid       (x_num, ..., x_num, space_dim)
-        Outputs:
-            tx_grid      (t_num*x_grid_size, space_dim + 1)
-        """
+        return item, []
 
-        t_num = t_grid.size(0)
-
-        x_grid = torch.reshape(x_grid, (1, x_grid_size, space_dim))
-        t_grid = torch.reshape(t_grid, (t_num, 1))
-
-        tx_grid = torch.zeros(t_num, x_grid_size, space_dim + 1, dtype=t_grid.dtype)
-
-        tx_grid[:, :, 0] = t_grid.expand(t_num, x_grid_size)
-        tx_grid[:, :, 1:] = x_grid.expand(t_num, x_grid_size, space_dim)
-
-        return torch.reshape(tx_grid, (t_num * x_grid_size, space_dim + 1))
-
-    def batch_data_pde_operator(self, data, t_eval, x_grid_size, step=1, dims=None):
-        """
-        Batch list of data into a Tensor ready for operator data decoder
-        Inputs:
-            data           (bs, t_num, x_grid_size, dim)
-        Outputs:
-            data_input     (input_len, bs, 1+output_dim*x_grid_size)
-            data_label     (data_len=t_num, bs, x_grid_size, output_dim)
-            lengths        (bs, )
-            dims           (bs, )
-        """
-        length = t_eval.size(0)
-        input_len = self.params.input_len // step
-        lengths = torch.LongTensor([input_len for _ in data])
-        if dims is None:
-            dims = torch.LongTensor([eq.size(-1) for eq in data])
-        else:
-            dims = torch.LongTensor(dims)
-
-        data_label = torch.stack(data).transpose(0, 1)  # (data_len, bs, x_grid_size, output_dim)
-
-        reshape_dim = x_grid_size * data_label.size(-1)
-        bs = len(dims)
-        t_input = t_eval[0 : self.params.input_len : step][:, None, None]  # (data_len, 1, 1)
-        t_input = t_input.expand(input_len, bs, 1)
-        data_input = data_label[0 : self.params.input_len : step].reshape(input_len, bs, reshape_dim)
-        data_input = torch.cat((t_input, data_input), dim=-1)
-
-        return data_input, data_label, lengths, dims
-
-    def batch_equations(self, equations):
-        """
-        Batch list of text seq into a Tensor ready for text decoder
-        Input:
-            equations  list of n sequences (torch.LongTensor vectors)
-        Outputs:
-            sent       Tensor (slen, n) where slen is the length of the longest sentence
-            lengths    (slen, ) length of each sentence
-        """
-        lengths = torch.LongTensor([2 + len(eq) for eq in equations])
-        sent = torch.LongTensor(lengths.max().item(), lengths.size(0)).fill_(self.float_word2id["<PAD>"])
-        sent[0] = self.equation_word2id["<BOS>"]
-        for i, eq in enumerate(equations):
-            sent[1 : lengths[i] - 1, i].copy_(eq)
-            sent[lengths[i] - 1, i] = self.equation_word2id["<EOS>"]
-        return sent, lengths
-
-    def batch_equations_placeholder(self, equations):
-        """
-        Batch list of text seq into a Tensor ready for text encoder (no <BOS> or <EOS>)
-        Input:
-            equations  list of n sequences (torch.LongTensor vectors)
-        Outputs:
-            sent       Tensor (slen, n) where slen is the length of the longest sentence
-            lengths    (slen, ) length of each sentence
-        """
-        lengths = torch.LongTensor([len(eq) for eq in equations])
-        sent = torch.LongTensor(lengths.max().item(), lengths.size(0)).fill_(self.float_word2id["<PAD>"])
-        for i, eq in enumerate(equations):
-            sent[: lengths[i], i].copy_(eq)
-        return sent, lengths
-    '''
