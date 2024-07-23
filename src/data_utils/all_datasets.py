@@ -16,9 +16,8 @@ from omegaconf import ListConfig
 logger = getLogger()
 
 
-
 class MultiPDE(Dataset):
-    def __init__(self, params, symbol_env,split="train",types = None,skip = 0):
+    def __init__(self, params, symbol_env, split="train", types=None, skip=0):
         super().__init__()
 
         # general initialization, should be called by all subclasses
@@ -50,8 +49,9 @@ class MultiPDE(Dataset):
 
         self.directory = params.data.directory
         if self.types == -1:
-            self.types = [name for name in os.listdir(self.directory ) if
-             os.path.isdir(os.path.join(self.directory , name))]
+            self.types = [
+                name for name in os.listdir(self.directory) if os.path.isdir(os.path.join(self.directory, name))
+            ]
 
             # self.types = ["conservation_sinflux",  "diff_linearreact_1D",  "diff_squarelogisticreact_1D", "inviscid_conservation_cubicflux",  "kdv","burgers",  "conservation_cubicflux",  "diff_bistablereact_1D",  "diff_logisreact_1D",  "inviscid_burgers",  "inviscid_conservation_sinflux"
             #               "Sine_Gordon"]
@@ -71,8 +71,6 @@ class MultiPDE(Dataset):
         self.task_indices = {}
         self.task_name = []
         self.load_data()
-
-
 
     def init_rng(self):
         """
@@ -118,29 +116,32 @@ class MultiPDE(Dataset):
     def load_data(self):
         self.init_rng()
         files = [
-            f for f in os.listdir(self.directory)
-            if (isinstance(self.types, (list, ListConfig)) and f in self.types) or
-               (isinstance(self.types, str) and f == self.types)
+            f
+            for f in os.listdir(self.directory)
+            if (isinstance(self.types, (list, ListConfig)) and f in self.types)
+            or (isinstance(self.types, str) and f == self.types)
         ]
         for file in files:
             task_name = file
-            file_name = file+ "_" + str(self.IC_per_param) + self.datasets + ".prefix"
-            file_path = os.path.join(self.directory, file,file_name)
+            file_name = file + "_" + str(self.IC_per_param) + self.datasets + ".prefix"
+            file_path = os.path.join(self.directory, file, file_name)
             task_indices_begin = len(self.data)
-            self.data.extend(self.load_onetask_data(file_path,task_name))
+            self.data.extend(self.load_onetask_data(file_path, task_name))
             task_indices_end = len(self.data)
             self.task_name.append(task_name)
-            self.task_indices[task_name] = np.arange(task_indices_begin,task_indices_end)
+            self.task_indices[task_name] = np.arange(task_indices_begin, task_indices_end)
 
-    def load_onetask_data(self,path,task_name = None):
+    def load_onetask_data(self, path, task_name=None):
         logger.info(f"Loading data from {path} ...")
         with io.open(path, mode="r", encoding="utf-8") as f:
-            reload_indices = self.rng.choice(range(self.skip, self.skip+self.reload_size), self.get_size,replace=False)
+            reload_indices = self.rng.choice(
+                range(self.skip, self.skip + self.reload_size), self.get_size, replace=False
+            )
             sorted_reload_indices = sorted(reload_indices)
 
             # Distribute indices among GPUs
             # Each GPU gets a slice of the sorted indices array, spaced by the number of GPUs
-            local_indices = sorted_reload_indices[self.local_rank::self.n_gpu_per_node]
+            local_indices = sorted_reload_indices[self.local_rank :: self.n_gpu_per_node]
 
             lines = []
             index_set = set(local_indices)  # Convert list to set for faster lookup
@@ -154,12 +155,12 @@ class MultiPDE(Dataset):
             filename = path[:-7] + "_data.h5"
             assert os.path.isfile(filename), "Data file {} not found".format(path)
             with h5py.File(filename, "r") as hf:
-                data_matrix = hf["data"][local_indices]
+                data_matrix = hf["data"][local_indices, : self.params.data.t_num]
 
             assert "dim" in data[0]
             assert len(data_matrix) == len(data), "Dataset size mismatch"
 
-            final_data = [data,data_matrix]
+            final_data = [data, data_matrix]
 
             logger.info(f"Data size: {data_matrix.shape}.")
 
@@ -168,11 +169,10 @@ class MultiPDE(Dataset):
 
         logger.info(f"Loaded {len(data)} equations from the disk.")
 
-        processed_data= self.process_data(final_data,task_name)
+        processed_data = self.process_data(final_data, task_name)
         return processed_data
 
-
-    def process_data(self, final_data,task_name):
+    def process_data(self, final_data, task_name):
         processed_data = []
         self.init_rng()
         if self.params.separate_modality:
@@ -185,14 +185,16 @@ class MultiPDE(Dataset):
             x["task"] = task_name
 
             if self.params.separate_modality:
-                this_data_matrix =data_matrix[idx]
+                this_data_matrix = data_matrix[idx]
                 this_data_matrix = self.add_noise(this_data_matrix)
                 x["data"] = torch.from_numpy(this_data_matrix).float()
             else:
                 x["data"] = torch.FloatTensor(self.add_noise(cur_data["data"]))
-            x["t"] = torch.from_numpy(np.linspace(self.t_range[0],self.t_range[1], self.t_num +1)[:-1]).float()
-            dx = (self.x_range[1] -self.x_range[0])/self.x_num
-            x["x"] = torch.from_numpy(np.linspace(self.x_range[0],self.x_range[1], self.x_num +1)[:-1] + 0.5 * dx).float()
+            x["t"] = torch.from_numpy(np.linspace(self.t_range[0], self.t_range[1], self.t_num + 1)[:-1]).float()
+            dx = (self.x_range[1] - self.x_range[0]) / self.x_num
+            x["x"] = torch.from_numpy(
+                np.linspace(self.x_range[0], self.x_range[1], self.x_num + 1)[:-1] + 0.5 * dx
+            ).float()
 
             for key in cur_data.keys():
                 if key != data:
@@ -201,18 +203,14 @@ class MultiPDE(Dataset):
             # x["tree"]=self.symbol_env.equation_encoder.decode(cur_data["tree_encoded"])
             processed_data.append(x)
 
-
         return processed_data
 
-
-
     def __getitem__(self, index):
-       return self.data[index]
+        return self.data[index]
+
     def __len__(self):
 
         return len(self.data)
-
-
 
 
 if __name__ == "__main__":
@@ -231,7 +229,7 @@ if __name__ == "__main__":
             if isinstance(v, dict):
                 print(f"{k}")
                 print_sample(v)
-            else: #k in ["data","tree", "t", "data_mask"]:
+            else:  # k in ["data","tree", "t", "data_mask"]:
                 if isinstance(v, torch.Tensor):
                     print(f"{k}: {v.size()}, {v.dtype}")
                 else:
@@ -249,7 +247,7 @@ if __name__ == "__main__":
         params.num_workers = 4
         params.batch_size = 10
         params.train_size = 512
-        params.data.train_types=-1
+        params.data.train_types = -1
 
         symbol_env = SymbolicEnvironment(params.symbol)
         dataset = MultiPDE(params, symbol_env, split="eval")
@@ -258,8 +256,8 @@ if __name__ == "__main__":
             dataset,
             batch_size=params.batch_size_eval,
             num_workers=params.num_workers,
-            collate_fn=custom_collate(params.data.max_output_dimension,symbol_env),
-            shuffle=True
+            collate_fn=custom_collate(params.data.max_output_dimension, symbol_env),
+            shuffle=True,
         )
 
         data_iter = iter(loader)
@@ -275,8 +273,8 @@ if __name__ == "__main__":
             dataset,
             batch_size=params.batch_size_eval,
             num_workers=params.num_workers,
-            collate_fn=custom_collate(params.data.max_output_dimension,symbol_env),
-            shuffle=True
+            collate_fn=custom_collate(params.data.max_output_dimension, symbol_env),
+            shuffle=True,
         )
 
         data_iter = iter(loader)
