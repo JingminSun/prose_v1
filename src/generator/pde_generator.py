@@ -1311,6 +1311,8 @@ class PDEGenerator(Generator):
         tf = self.tfinals["wave"]
         coeff_t = self.t_range / tf
         t_eval = self.t_eval / coeff_t
+        beta_range = self.get_sample_range(beta)
+        beta = self.refine_floats(rng.uniform(*beta_range, (1,)))[0]
         term_list = [
             [
                 self.mul_terms([str(coeff_t ** 2), "utt_0"]),
@@ -1318,8 +1320,6 @@ class PDEGenerator(Generator):
             ]
         ]
         item["tree"] = self.tree_from_list(op_list, term_list)
-        beta_range = self.get_sample_range(beta)
-        beta = self.refine_floats(rng.uniform(*beta_range, (1,)))[0]
         num_initial_points = self.ICs_per_equation
 
         res = []

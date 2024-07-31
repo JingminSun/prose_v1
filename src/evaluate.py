@@ -158,21 +158,26 @@ class Evaluator(object):
                             samples["t"][i],
                             samples["x"][i],
                             data_all[i],
-                            params.input_len,
+                            params.data.input_len,
                             plot_title,
                             filename=f"{type}_plot_{index}",
                             folder=save_folder,
                             dim=params.data[type].dim,
-                            input_step = params.input_step,
-                            output_step = params.output_step,
-                            output_start = params.input_len if params.output_step == 1 else params.input_len + 1
+                            input_step = params.data.input_step,
+                            output_step = params.data.output_step,
+                            output_start = params.data.input_len if params.data.output_step == 1 else params.data.input_len + 1
                         )
 
                 if params.log_eval_plots > 0 and num_plotted < params.log_eval_plots:
                     # only plot the first element
 
-                    output_zero_shot = data_output[0]
-                    cur_data = data_all[0]
+                    if isinstance(data_output, np.ndarray):
+                        # already converted to numpy
+                        output_zero_shot = data_output[0]
+                        cur_data = data_all[0]
+                    else:
+                        output_zero_shot = data_output[0].float().numpy(force=True)
+                        cur_data = samples["data"][0].numpy(force=True)
 
                     index = idx * params.batch_size_eval
                     plot_title = "Type {} | Idx {} | zero {:.4f} ".format(type,index,cur_result[ "_l2_error"][ 0])
@@ -182,14 +187,14 @@ class Evaluator(object):
                         samples["t"][0],
                         samples["x"][0],
                         cur_data,
-                        params.input_len,
+                        params.data.input_len,
                         plot_title,
                         filename=f"{type}_plot_{index}",
                         folder=plot_folder,
                         dim=params.data[type].dim,
-                        input_step=params.input_step,
-                        output_step=params.output_step,
-                        output_start=params.input_len if params.output_step == 1 else params.input_len + 1
+                        input_step=params.data.input_step,
+                        output_step=params.data.output_step,
+                        output_start=params.data.input_len if params.data.output_step == 1 else params.data.input_len + 1
                     )
 
                     if params.use_wandb:
