@@ -17,7 +17,7 @@ logger = getLogger()
 
 
 class MultiPDE(Dataset):
-    def __init__(self, params, symbol_env, split="train", types=None, skip=0):
+    def __init__(self, params, symbol_env, split="train", types=None, type_data_pair=None, skip=0):
         super().__init__()
 
         # general initialization, should be called by all subclasses
@@ -38,6 +38,9 @@ class MultiPDE(Dataset):
             else:
                 self.get_size = params.eval_size
 
+        self.type_data_pairs = type_data_pair
+        if isinstance( self.type_data_pairs, str):
+            self.type_data_pairs = [ self.type_data_pairs]
         self.symbol_env = symbol_env
         self.split = split
         self.IC_per_param = params.IC_per_param
@@ -50,12 +53,12 @@ class MultiPDE(Dataset):
         self.directory = params.data.directory
         if self.types == -1:
             self.types = [
-                name for name in os.listdir(self.directory) if os.path.isdir(os.path.join(self.directory, name))
+                name for name in os.listdir(self.directory) if os.path.isdir(os.path.join(self.directory, name)) and "cosflux" not in name
             ]
 
             # self.types = ["conservation_sinflux",  "diff_linearreact_1D",  "diff_squarelogisticreact_1D", "inviscid_conservation_cubicflux",  "kdv","burgers",  "conservation_cubicflux",  "diff_bistablereact_1D",  "diff_logisreact_1D",  "inviscid_burgers",  "inviscid_conservation_sinflux"
             #               "Sine_Gordon"]
-        print(self.types)
+        # print(self.types)
         self.num_workers = params.num_workers
         self.local_rank = params.local_rank
         self.n_gpu_per_node = params.n_gpu_per_node
@@ -115,21 +118,36 @@ class MultiPDE(Dataset):
 
     def load_data(self):
         self.init_rng()
-        files = [
-            f
-            for f in os.listdir(self.directory)
-            if (isinstance(self.types, (list, ListConfig)) and f in self.types)
-            or (isinstance(self.types, str) and f == self.types)
-        ]
-        for file in files:
-            task_name = file
-            file_name = file + "_" + str(self.IC_per_param) + self.datasets + ".prefix"
-            file_path = os.path.join(self.directory, file, file_name)
-            task_indices_begin = len(self.data)
-            self.data.extend(self.load_onetask_data(file_path, task_name))
-            task_indices_end = len(self.data)
-            self.task_name.append(task_name)
-            self.task_indices[task_name] = np.arange(task_indices_begin, task_indices_end)
+        if self.type_data_pairs is None:
+            files = [
+                f
+                for f in os.listdir(self.directory)
+                if (isinstance(self.types, (list, ListConfig)) and f in self.types)
+                or (isinstance(self.types, str) and f == self.types)
+            ]
+            for file in files:
+                task_name = file
+                file_name = file + "_" + str(self.IC_per_param) + self.datasets + ".prefix"
+                file_path = os.path.join(self.directory, file, file_name)
+                task_indices_begin = len(self.data)
+                self.data.extend(self.load_onetask_data(file_path, task_name))
+                task_indices_end = len(self.data)
+                self.task_name.append(task_name)
+                self.task_indices[task_name] = np.arange(task_indices_begin, task_indices_end)
+        else:
+            for pair in self.type_data_pairs:
+                type,data_name = pair.split(".")
+                if data_name != "":
+                    data_name = "_" + data_name
+                task_name = type
+                file_name = type + "_" + str(self.IC_per_param) + data_name + ".prefix"
+                file_path = os.path.join(self.directory, type, file_name)
+                task_indices_begin = len(self.data)
+                self.data.extend(self.load_onetask_data(file_path, task_name))
+                task_indices_end = len(self.data)
+                self.task_name.append(task_name)
+                self.task_indices[task_name] = np.arange(task_indices_begin, task_indices_end)
+
 
     def load_onetask_data(self, path, task_name=None):
         logger.info(f"Loading data from {path} ...")

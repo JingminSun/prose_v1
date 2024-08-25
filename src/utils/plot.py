@@ -117,8 +117,10 @@ def plot_1d_pde(
     for j in range(dim):
         # Create the data list considering if output_2 is provided
         data_list = [input[..., j], target[..., j], output_1[..., j], target[..., j] - output_1[..., j]]
-        titles = ['Input', 'Target', 'Output_zero_shot', 'Diff_zero_shot']
+        titles = ['Input', 'Target', 'Output', 'Diff']
         if output_2 is not None:
+            titles[2] = 'Output_zero_shot'
+            titles[3] = 'Diff_zero_shot'
             data_list.extend([output_2[..., j], target[..., j] - output_2[..., j]])
             titles.extend(['Output_few_shot', 'Diff_few_shot'])
 

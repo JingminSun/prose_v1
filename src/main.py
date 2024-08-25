@@ -115,11 +115,12 @@ def main(params: DictConfig):
     if params.eval_only:
         stats, _ = evaluator.evaluate()
         logger.info(
-            "Eval | data loss = {:.8f} | rel l2 = {:.8f} | rel l2 1st_half = {:.8f} | rel l2 2nd_half = {:.8f}".format(
+            "Eval | data loss = {:.8f} | rel l2 = {:.8f} | rel l2 1st_half = {:.8f} | rel l2 2nd_half = {:.8f} | r2 score = {:.8f}".format(
                 stats["data_loss"],
                 stats["_l2_error"],
                 stats["_l2_error_first_half"],
                 stats["_l2_error_second_half"],
+                stats["_r2"]
             )
         )
 
@@ -153,12 +154,13 @@ def main(params: DictConfig):
         stats, results_per_type = evaluator.evaluate()
 
         logger.info(
-            "Epoch {} Eval  | data loss = {:.8f} | rel l2 = {:.8f} | rel l2 1st_half = {:.8f} | rel l2 2nd_half = {:.8f}".format(
+            "Epoch {} Eval  | data loss = {:.8f} | rel l2 = {:.8f} | rel l2 1st_half = {:.8f} | rel l2 2nd_half = {:.8f}  | r2 score = {:.8f}".format(
                 trainer.epoch,
                 stats["data_loss"],
                 stats["_l2_error"],
                 stats["_l2_error_first_half"],
                 stats["_l2_error_second_half"],
+                stats["_r2"]
             )
         )
         if params.use_wandb:

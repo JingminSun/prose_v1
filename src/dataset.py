@@ -12,18 +12,24 @@ def get_dataset(params, symbol_env, split, skip = 0):
 
     if split == "train":
 
-        return MultiPDE(params,symbol_env,split = split, skip= skip)
+        return MultiPDE(params,symbol_env,split = split, type_data_pair=params.data.train_data_pairs,skip= skip)
     else:
         datasets = {}
-        if    params.data.eval_types == -1:
-            types = [name for name in os.listdir(params.data.directory) if
-                              os.path.isdir(os.path.join(params.data.directory, name))]
+        if params.data.eval_data_pairs is None:
+            if    params.data.eval_types == -1:
+                types = [name for name in os.listdir(params.data.directory) if
+                                  os.path.isdir(os.path.join(params.data.directory, name)) and "cosflux" not in name]
+            else:
+                types =  params.data.eval_types if split == "eval" else params.data.train_types
+                types = [types] if isinstance(types,str) else types
+            for t in   types:
+                ds = MultiPDE(params,symbol_env,split = split,types=t, skip= skip)
+                datasets[t] = ds
         else:
-            types =  params.data.eval_types if split == "eval" else params.data.train_types
-            types = [types] if isinstance(types,str) else types
-        for t in   types:
-            ds = MultiPDE(params,symbol_env,split = split,types=t, skip= skip)
-            datasets[t] = ds
+            for pair in params.data.eval_data_pairs:
+                ds = MultiPDE(params,symbol_env,split = split, type_data_pair=pair, skip= skip)
+                type = pair.split(".")[0]
+                datasets[type] = ds
 
         return datasets
 

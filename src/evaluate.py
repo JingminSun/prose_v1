@@ -26,6 +26,7 @@ metric_to_header = {
     "_rmse": "rmse",
     "_l2_error_first_half": "rel l2 1st_half",
     "_l2_error_second_half": "rel l2 2nd_half",
+    "_r2": "r2"
 }
 
 
@@ -138,7 +139,10 @@ class Evaluator(object):
 
                 for k in cur_result.keys():
                     keys = k
-                    results[keys].extend(cur_result[k])
+                    if k == "_r2":
+                        results[keys].append(cur_result[k])
+                    else:
+                        results[keys].extend(cur_result[k])
                 if params.print_outputs:
                     # plot all outputs
 
@@ -158,14 +162,14 @@ class Evaluator(object):
                             samples["t"][i],
                             samples["x"][i],
                             data_all[i],
-                            params.data.input_len,
+                            params.input_len,
                             plot_title,
                             filename=f"{type}_plot_{index}",
                             folder=save_folder,
                             dim=params.data[type].dim,
-                            input_step = params.data.input_step,
-                            output_step = params.data.output_step,
-                            output_start = params.data.input_len if params.data.output_step == 1 else params.data.input_len + 1
+                            input_step = params.input_step,
+                            output_step = params.output_step,
+                            output_start = params.input_len if params.output_step == 1 else params.input_len + 1
                         )
 
                 if params.log_eval_plots > 0 and num_plotted < params.log_eval_plots:
@@ -180,21 +184,21 @@ class Evaluator(object):
                         cur_data = samples["data"][0].numpy(force=True)
 
                     index = idx * params.batch_size_eval
-                    plot_title = "Type {} | Idx {} | zero {:.4f} ".format(type,index,cur_result[ "_l2_error"][ 0])
+                    plot_title = "Type {} |  $L^2$ error {:.4f} % ".format(type,cur_result[ "_l2_error"][ 0] * 100)
                     path = plot_1d_pde(
                         output_zero_shot,
                         None,
                         samples["t"][0],
                         samples["x"][0],
                         cur_data,
-                        params.data.input_len,
+                        params.input_len,
                         plot_title,
                         filename=f"{type}_plot_{index}",
                         folder=plot_folder,
                         dim=params.data[type].dim,
-                        input_step=params.data.input_step,
-                        output_step=params.data.output_step,
-                        output_start=params.data.input_len if params.data.output_step == 1 else params.data.input_len + 1
+                        input_step=params.input_step,
+                        output_step=params.output_step,
+                        output_start=params.input_len if params.output_step == 1 else params.input_len + 1
                     )
 
                     if params.use_wandb:
@@ -209,7 +213,10 @@ class Evaluator(object):
                     break
 
             for k, v in results.items():
-                results[k] = np.sum(np.array(v))
+                if k == "_r2":
+                    results[k] = np.mean(np.array(v))
+                else:
+                    results[k] = np.sum(np.array(v))
             results["size"] = eval_size
             all_results[type] = results
 
@@ -238,6 +245,9 @@ class Evaluator(object):
                 if k == "size":
                     res_mean_type[k] = v
                     total_size += v
+                elif k=="_r2":
+                    res_mean_type[k] = v
+                    stats[k] += v / len(self.dataloaders)
                 elif k == "_mse":
                     # rescale mse due to padding dimensions
                     ratio = self.params.data.max_output_dimension / self.params.data[type].dim
@@ -251,7 +261,7 @@ class Evaluator(object):
                     res_mean_type[k] = v / results["size"]
                     stats[k] += v
             results_per_type[type] = res_mean_type
-        stats = {k: v / total_size for k, v in stats.items()}
+        stats = {k: v if k=="_r2" else v / total_size for k, v in stats.items()}
 
         # report metrics per equation type as a table
         headers = ["type", "dim", "size", "data_loss"] + [k for k in self.validation_metrics]

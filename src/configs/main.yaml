@@ -99,7 +99,7 @@ log_eval_plots: -1
 validation_metrics: _l2_error
 
 # Metrics to report (select from _mse, _rmse, _l2_error, _l2_error_first_half, _l2_error_second_half)
-validation_metrics_print: _l2_error,_l2_error_first_half,_l2_error_second_half
+validation_metrics_print: _l2_error,_l2_error_first_half,_l2_error_second_half,_r2
 
 # Reload a pretrained model
 reload_model: null

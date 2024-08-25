@@ -34,8 +34,9 @@ class PROSE_1DPDE(nn.Module):
 
         self.embedder = LinearEmbedder_1DPDE(config.embedder, self.x_num, self.max_output_dim,full_tx = config.data_decoder.full_tx)
         self.data_encoder = TransformerDataEncoder(config.data_encoder)
-        self.symbol_encoder = TransformerSymbolEncoder(config.symbol_encoder, symbol_env.equation_id2word)
-        self.fusion = TransformerFusion(config.fusion)
+        if not self.config.no_text:
+            self.symbol_encoder = TransformerSymbolEncoder(config.symbol_encoder, symbol_env.equation_id2word)
+            self.fusion = TransformerFusion(config.fusion)
         self.data_decoder = DataOperatorDecoder(config.data_decoder)
 
 
@@ -43,8 +44,9 @@ class PROSE_1DPDE(nn.Module):
         s = "\n"
         s += f"\tEmbedder:        {sum([p.numel() for p in self.embedder.parameters() if p.requires_grad]):,}\n"
         s += f"\tData Encoder:    {sum([p.numel() for p in self.data_encoder.parameters() if p.requires_grad]):,}\n"
-        s += f"\tSymbol Encoder:  {sum([p.numel() for p in self.symbol_encoder.parameters() if p.requires_grad]):,}\n"
-        s += f"\tFusion:          {sum([p.numel() for p in self.fusion.parameters() if p.requires_grad]):,}\n"
+        if not self.config.no_text:
+            s += f"\tSymbol Encoder:  {sum([p.numel() for p in self.symbol_encoder.parameters() if p.requires_grad]):,}\n"
+            s += f"\tFusion:          {sum([p.numel() for p in self.fusion.parameters() if p.requires_grad]):,}\n"
         s += f"\tData Decoder:    {sum([p.numel() for p in self.data_decoder.parameters() if p.requires_grad]):,}"
         return s
 
@@ -102,21 +104,23 @@ class PROSE_1DPDE(nn.Module):
         """
 
         data_encoded = self.data_encoder(data_input)  # (bs, data_len, dim)
-        symbol_encoded = self.symbol_encoder(
-            symbol_input, src_key_padding_mask=symbol_padding_mask
-        )  # (bs, symbol_len, dim)
+        if not self.config.no_text:
+            symbol_encoded = self.symbol_encoder(
+                symbol_input, src_key_padding_mask=symbol_padding_mask
+            )  # (bs, symbol_len, dim)
 
-        fused, fused_mask = self.fusion(
-            x0=data_encoded,
-            x1=symbol_encoded,
-            key_padding_mask0=None,
-            key_padding_mask1=symbol_padding_mask,
-        )  # (bs, data_len+symbol_len, dim)
+            fused, fused_mask = self.fusion(
+                x0=data_encoded,
+                x1=symbol_encoded,
+                key_padding_mask0=None,
+                key_padding_mask1=symbol_padding_mask,
+            )  # (bs, data_len+symbol_len, dim)
 
-        # fused = data_encoded
-        # fused_mask = None
+            output["symbol_encoded"] = symbol_encoded
+        else:
+            fused = data_encoded
+            fused_mask = None
         output["data_encoded"] = data_encoded
-        output["symbol_encoded"] = symbol_encoded
         output["fused"] = fused
         """
         Step 3: Decode data

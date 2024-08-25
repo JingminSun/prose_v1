@@ -31,6 +31,8 @@ conservation_cubicflux:
   dim: 1
 conservation_sinflux:
   dim: 1
+conservation_linearflux:
+  dim: 1
 inviscid_burgers:
   dim: 1
 inviscid_conservation_sinflux:

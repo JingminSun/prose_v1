@@ -17,7 +17,8 @@ space_dim: 1
 directory: /home/shared/prose/sep_types
 eval_data: null
 train_data: null
-
+train_data_pairs: null
+eval_data_pairs: null
 
 burgers:
   dim: 1
@@ -34,6 +35,12 @@ conservation_sinflux:
 inviscid_burgers:
   dim: 1
 inviscid_conservation_sinflux:
+  dim: 1
+conservation_cosflux:
+  dim: 1
+inviscid_conservation_cosflux:
+  dim: 1
+conservation_linearflux:
   dim: 1
 kdv:
   dim: 1
@@ -61,7 +68,6 @@ Klein_Gordon:
   dim: 1
 Sine_Gordon:
   dim: 1
-
 
 #shallow_water:
 #  data_path: /s1/shared/dataset/pdebench/2D/shallow-water/2D_rdb_NA_NA.h5
