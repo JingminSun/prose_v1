@@ -95,7 +95,7 @@ class RandomFunctions:
         self.equation_words = sorted(list(set(self.symbols)))
         self.equation_words = special_words + self.equation_words
 
-        if self.generating_mode:
+        if self.generating_mode or self.params.data.use_skeleton:
             self.generator = PDEGenerator(
                 self.params,
                 self.float_encoder,

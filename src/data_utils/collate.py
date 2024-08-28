@@ -52,7 +52,16 @@ def collate_symbols(batch_of_equations,symbol_env):
         this[i, 1:data_dim - 1].copy_(equation)
         this[i, data_dim - 1] = symbol_env.equation_word2id["<EOS>"]
     return  this, lengths,max_length
+def collate_symbols_nobeos(batch_of_equations,symbol_env):
+    lengths = torch.LongTensor([len(eq) for eq in batch_of_equations])
+    max_length = lengths.max().item()
+    this = torch.LongTensor(len(batch_of_equations), max_length).fill_(symbol_env.float_word2id["<PAD>"])
 
+    cur_eqs = symbol_env.word_to_idx(batch_of_equations, float_input=False)
+    for i, equation in enumerate(cur_eqs):
+        data_dim = len(equation)
+        this[i, :data_dim ].copy_(equation)
+    return  this, lengths,max_length
 def custom_collate(max_data_dim,symbol_env):
     """
     Input:
@@ -61,39 +70,6 @@ def custom_collate(max_data_dim,symbol_env):
     Output:
        collate function
     """
-    #
-    # def my_collate(batch):
-    #     # Create a dictionary to hold the processed batch
-    #     res = defaultdict(list)
-    #
-    #     # Group data by class
-    #     class_data = defaultdict(list)
-    #     for item in batch:
-    #         class_data[item['task']].append(item)
-    #
-    #     # Randomly select N tasks
-    #     if N > len(class_data):
-    #         # random.choices allows for replacement, and we can pick each class multiple times if needed
-    #         selected_classes = random.choices(list(class_data.keys()), k=N)
-    #     else:
-    #         # Use random.sample if there are enough unique classes to meet N without needing to revisit
-    #         selected_classes = random.sample(list(class_data.keys()), k=N)
-    #     # Initialize support and query sets
-    #     task_list = []
-    #
-    #     # For each selected class, randomly choose K examples for support, and Q for query
-    #     for i in range(len(selected_classes)):
-    #         cls = selected_classes[i]
-    #         if len(class_data[cls]) < K + Q:
-    #             continue  # Skip if there aren't enough examples for both support and query
-    #         random.shuffle(class_data[cls])
-    #         this_task = {}
-    #         this_task["support"] = class_data[cls][:K]
-    #         this_task["query"] = class_data[cls][K:K + Q]
-    #         task_list.append(this_task)
-    #
-    #     # Return separate support and query sets
-    #     return collate_onetask(task_list)
 
     def my_collate(batch):
         # dico = {}
@@ -130,20 +106,50 @@ def custom_collate(max_data_dim,symbol_env):
             elif k == "tree_encoded":
 
                 if not isinstance(batch[0][k][0],list):
+
                     batch_tree = []
                     for d in batch:
                         batch_tree.append(d[k])
                     collated_tree, lengths,max_length = collate_symbols(batch_tree,symbol_env)
                     res[k] = collated_tree
-                    res["tree_mask"] = get_padding_mask(lengths,max_length, beos_added = True)
+                    res["original_tree"] = batch_tree
+                    res["tree_length"] = lengths
+                    res["tree_mask_excludingeos"] = get_padding_mask(lengths,max_length, beos_added = True)
+                    res["tree_mask"] = get_padding_mask(lengths, max_length, beos_added=False)
                 else:
                     res[k] = []
+                    res["original_tree"] = []
+                    res["tree_length"] = []
                     res["tree_mask"] = []
                     for d in batch:
                         cur_data = d[k]
                         collated_tree, lengths,max_length = collate_symbols(cur_data,symbol_env)
                         res[k].append(collated_tree)
-                        res["tree_mask"].append(get_padding_mask(lengths,max_length, beos_added = True))
+                        res["original_tree"].append(cur_data)
+                        res["tree_length"].append(lengths)
+                        res["tree_mask_excludingeos"].append(get_padding_mask(lengths,max_length, beos_added = True))
+                        res["tree_mask"].append(get_padding_mask(lengths,max_length, beos_added = False))
+            elif k == "tree_skeleton":
+
+                if not isinstance(batch[0][k][0],list):
+                    batch_tree = []
+                    for d in batch:
+                        batch_tree.append(d[k])
+                    collated_tree, lengths,max_length = collate_symbols_nobeos(batch_tree,symbol_env)
+                    res[k] = collated_tree
+                    res["tree_skeleton_length"] = lengths
+                    res["tree_mask_skeleton"] = get_padding_mask(lengths,max_length, beos_added = False)
+                else:
+                    res[k] = []
+                    res["tree_length"] = []
+                    res["tree_mask"] = []
+                    for d in batch:
+                        cur_data = d[k]
+                        collated_tree, lengths,max_length = collate_symbols_nobeos(cur_data,symbol_env)
+                        res[k].append(collated_tree)
+                        res["tree_skeleton_length"].append(lengths)
+                        res["tree_mask_skeleton"].append(get_padding_mask(lengths,max_length, beos_added = False))
+
 
             elif isinstance(batch[0][k],dict):
                 res[k] = []

@@ -51,7 +51,7 @@ class Evaluator(object):
         self.modules = trainer.modules
         self.params = trainer.params
         self.symbol_env = symbol_env
-
+        self.space_dim = self.params.data.max_input_dimension
         self.skip = self.params.train_size
         self.datasets: dict = get_dataset(self.params, self.symbol_env, split="eval", skip = self.skip)
         self.dataloaders = {
@@ -73,6 +73,39 @@ class Evaluator(object):
 
         self.validation_metrics = self.params.validation_metrics_print.split(",")
 
+        t_grid = np.linspace( self.params.data.t_range[0], self.params.data.t_range[1], self.params.data.t_num)
+        x_grid = np.linspace(self.params.data.x_range[0], self.params.data.x_range[1], self.params.data.x_num)
+        coeff = np.random.uniform(-5, 5, size=(8, self.params.data.max_input_dimension))
+        # Create mesh grids
+        T, X = np.meshgrid(t_grid, x_grid, indexing="ij")
+
+        input_points = np.zeros((self.params.data.max_input_dimension, self.params.data.t_num, self.params.data.x_num, 8))
+        for i in range(self.params.data.max_input_dimension):
+            input_points[i, :, :, 0] = (coeff[0, i] + coeff[1, i] * T + coeff[2, i] * T ** 2) * (
+                    coeff[3, i] + coeff[4, i] * X + coeff[5, i] * X ** 2 + coeff[6, i] * X ** 3 + coeff[7, i] * X ** 4
+            )
+            input_points[i, :, :, 1] = (coeff[1, i] + 2 * coeff[2, i] * T) * (
+                    coeff[3, i] + coeff[4, i] * X + coeff[5, i] * X ** 2 + coeff[6, i] * X ** 3 + coeff[7, i] * X ** 4
+            )
+            # ut
+            input_points[i, :, :, 2] = (2 * coeff[2, i]) * (
+                    coeff[3, i] + coeff[4, i] * X + coeff[5, i] * X ** 2 + coeff[6, i] * X ** 3 + coeff[7, i] * X ** 4
+            )
+            # utt
+            input_points[i, :, :, 3] = (coeff[0, i] + coeff[1, i] * T + coeff[2, i] * T ** 2) * (
+                    coeff[4, i] + 2 * coeff[5, i] * X + 3 * coeff[6, i] * X ** 2 + 4 * coeff[7, i] * X ** 3
+            )  # ux
+            input_points[i, :, :, 4] = (coeff[0, i] + coeff[1, i] * T + coeff[2, i] * T ** 2) * (
+                    2 * coeff[5, i] + 6 * coeff[6, i] * X + 12 * coeff[7, i] * X ** 2
+            )  # uxx
+            input_points[i, :, :, 5] = (coeff[0, i] + coeff[1, i] * T + coeff[2, i] * T ** 2) * (
+                    6 * coeff[6, i] + 24 * coeff[7, i] * X
+            )  # uxxx
+            input_points[i, :, :, 6] = (coeff[0, i] + coeff[1, i] * T + coeff[2, i] * T ** 2) * (
+                    24 * coeff[7, i]
+            )  # uxxxx
+            input_points[i, :, :, 7] = X
+        self.input_points = input_points
     @torch.no_grad()
     def evaluate(self):
 
@@ -96,7 +129,9 @@ class Evaluator(object):
         for type, loader in self.dataloaders.items():
             eval_size = 0
             num_plotted = 0
+            text_valid = 0
             results = defaultdict(list)
+
 
             for idx, samples in enumerate(loader):
 
@@ -115,7 +150,7 @@ class Evaluator(object):
                         output_times=dict["output_times"][..., None],
                         symbol_input=dict["symbol_input"],
                         query_space_grid=dict["spatial_grid"][..., None] if params.model.data_decoder.full_tx else None,
-                        symbol_padding_mask=dict["symbol_mask"]
+                        symbol_input_padding_mask=dict["symbol_input_mask"]
                     )  # (bs, output_len, x_num, x_num, data_dim)
                     data_output = output_dict["data_output"]
                     data_output = data_output* dict["data_mask"]
@@ -137,6 +172,77 @@ class Evaluator(object):
                     data_output, data_label, metrics=params.validation_metrics_print, batched=True
                 )
 
+                if not params.model.no_text_decoder:
+                    symbol_output = output_dict["symbol_generated"]
+                    min_loss_save = []
+
+                    symbol_output = symbol_output.unsqueeze(-1)
+                    symbol_output = (
+                        symbol_output.transpose(1, 2).cpu().tolist()
+                    )  # (bs, 1, text_len)
+                    symbol_output = [
+                        list(
+                            filter(
+                                lambda x: x is not None,
+                                [
+                                    self.symbol_env.idx_to_infix(hyp[1:-1], is_float=False, str_array=False)
+                                    for hyp in symbol_output[i]
+                                ],
+                            )
+                        )
+                        for i in range(bs)
+                    ]  # nested list of shape (bs, 1), some inner lists are possibly empty
+
+                    for i in range(bs):
+                        tree_list = symbol_output[i]
+                        label_outputs = None
+                        valid_loss = []
+
+                        for tree in tree_list:
+                            try:
+                                generated_outputs = tree.val(self.input_points, self.space_dim)
+
+                            except:
+                                continue
+
+                            if label_outputs is None:
+                                # if self.space_dim == 0:
+                                #     label_outputs = tree[i].val(input_points)
+                                # else:
+                                #     label_outputs = tree[i].val(t_grid, x_grid,coeff)
+                                label_outputs = dict["tree_structure"][i].val(self.input_points, self.space_dim)
+                                assert np.isfinite(label_outputs).all()
+                            try:
+                                if np.isfinite(generated_outputs).all():
+                                    valid_loss.append(
+                                        np.sqrt(
+                                            np.sum((generated_outputs - label_outputs) ** 2)
+                                            / (np.sum(label_outputs ** 2) + eps)
+                                        )
+                                    )
+                            except:
+                                continue
+                        if len(valid_loss) > 0:
+                            # generated tree is valid, compute other metrics
+                            min_loss = min(valid_loss)
+                            text_valid += 1
+                            min_loss_save.append(min_loss)
+
+                            if params.print_outputs:
+                                if i % 50 == 0:
+                                    logger.info(
+                                        "[{}] Text loss: {:.4f}".format(
+                                            i, min_loss
+                                        )
+                                    )
+                                    # logger.info("Input:     {}".format(text_seqs[i]))
+                                    logger.info("Target:    {}".format(dict["tree_structure"][i][i]))
+                                    try:
+                                        logger.info("Generated: {}\n".format(tree_list[0]))
+                                    except:
+                                        # logger.info("Generated: {}\n".format(tree_list[1]))
+                                        pass
+                    results["text_loss"].extend(min_loss_save)
                 for k in cur_result.keys():
                     keys = k
                     if k == "_r2":
@@ -218,6 +324,8 @@ class Evaluator(object):
                 else:
                     results[k] = np.sum(np.array(v))
             results["size"] = eval_size
+            if not params.model.no_text_decoder:
+                results["text_valid"] = text_valid
             all_results[type] = results
 
         if params.multi_gpu:
@@ -237,6 +345,7 @@ class Evaluator(object):
         # aggregate results and compute averages
 
         total_size = 0
+        total_valid = 0
         results_per_type = {}
         stats = defaultdict(float)
         for type, results in all_results.items():
@@ -257,14 +366,24 @@ class Evaluator(object):
                     ratio = (self.params.data.max_output_dimension / self.params.data[type].dim) ** 0.5
                     res_mean_type[k] = v / results["size"] * ratio
                     stats[k] += v * ratio
+                elif k == "text_loss":
+                    res_mean_type[k] = v / max(results["text_valid"],1)
+                    stats[k] += v
+                elif k == "text_valid":
+                    res_mean_type["valid_fraction"] = v / results["size"]
+                    total_valid += v
+                    stats["valid_fraction"] += v
                 else:
                     res_mean_type[k] = v / results["size"]
                     stats[k] += v
             results_per_type[type] = res_mean_type
-        stats = {k: v if k=="_r2" else v / total_size for k, v in stats.items()}
+        stats = {k: v if k=="_r2" else v/max(total_valid,1) if k=="text_loss" else v / total_size for k, v in stats.items()}
 
         # report metrics per equation type as a table
-        headers = ["type", "dim", "size", "data_loss"] + [k for k in self.validation_metrics]
+        if self.params.model.no_text_decoder:
+            headers = ["type", "dim", "size", "data_loss"] + [k for k in self.validation_metrics]
+        else:
+            headers = ["type", "dim", "size", "data_loss"] + [k for k in self.validation_metrics] + [ "text_loss","valid_fraction"]
         table = []
         for type, results in results_per_type.items():
             row = [type, self.params.data[type].dim]

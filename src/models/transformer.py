@@ -520,7 +520,7 @@ class TransformerSymbolDecoder(nn.Module):
                                      e.g. [5, 6]
 
         """
-        bs = memory.size(1)
+        bs = memory.size(0)
         memory = memory.transpose(0, 1)  # (memory_len, bs, dim)
 
         # generated sentences
@@ -536,6 +536,10 @@ class TransformerSymbolDecoder(nn.Module):
         # generation loop
         while cur_len < max_len:  # max length of generation
             tgt = generated[:cur_len]  # (cur_len, bs)
+            tgt = self.word_embeddings(tgt)
+            if self.positional_embedding is not None:
+                tgt = self.positional_embedding(tgt,batch_first=False)  # (output_len, bs, dim)
+
             if self.config.kv_cache:
                 decoded, cache = self.transformer_decoder(
                     tgt=tgt, memory=memory, memory_key_padding_mask=memory_key_padding_mask, cache=cache

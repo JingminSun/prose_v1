@@ -515,7 +515,7 @@ class LearnablePE(nn.Module):
                       [seq_len, batch_size, embedding_dim] otherwise
             positions: Tensor [batch_size, seq_len]
         """
-        seq_len = x.size(1) if batch_first else x.size(1)
+        seq_len = x.size(1) if batch_first else x.size(0)
         if positions is None:
             positions = x.new(seq_len).long()
             positions = torch.arange(seq_len, out=positions).unsqueeze(0)  # (1, seq_len)

@@ -217,8 +217,10 @@ class MultiPDE(Dataset):
             for key in cur_data.keys():
                 if key != data:
                     x[key] = copy.deepcopy(cur_data[key])
-
-            # x["tree"]=self.symbol_env.equation_encoder.decode(cur_data["tree_encoded"])
+            if self.params.data.use_skeleton:
+                x["tree_skeleton"]=self.symbol_env.generator.generator.get_skeleton_tree(
+                            x["type"], mode=0, rng=self.symbol_env.rng
+                        )
             processed_data.append(x)
 
         return processed_data

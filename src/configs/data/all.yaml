@@ -13,6 +13,7 @@ x_range:
   - 0
   - 2
 
+use_skeleton: false
 space_dim: 1
 directory: /home/shared/prose/sep_types
 eval_data: null
@@ -68,6 +69,17 @@ Klein_Gordon:
   dim: 1
 Sine_Gordon:
   dim: 1
+
+### Not Necessary, for initializing symbol_generator to generate the skeleton tree
+types: burgers
+
+use_sharedIC: false
+IC_types: train
+use_sharedcoeff: false
+IC_range: 1
+param_range_gamma: 0.1
+
+
 
 #shallow_water:
 #  data_path: /s1/shared/dataset/pdebench/2D/shallow-water/2D_rdb_NA_NA.h5

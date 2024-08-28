@@ -74,6 +74,8 @@ loss_weight: none
 # normalize input data for model
 normalize: 1
 
+# loss ratio
+data_symbol_loss_ratio: 5
 
 ### evaluate
 

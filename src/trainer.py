@@ -74,6 +74,7 @@ class Trainer(object):
         self.reload_checkpoint()
         self.create_dataloader()
         self.data_loss = 0.0
+        self.symbol_loss = 0.0
 
     def create_dataloader(self):
         params = self.params
@@ -368,9 +369,26 @@ class Trainer(object):
         t = samples["t"]
         x = samples["x"]
         symbol = samples["tree_encoded"]
+        symbol_padding_mask =  samples["tree_mask"]
+        symbol_length = samples["tree_length"]
 
-        symbol_input = symbol[:,1:-1] # Deleting EOS/BOS
-        symbol_mask = samples["tree_mask"][:,1:-1]
+        # symbol_alen = torch.arange(symbol_length.max(), dtype=torch.long, device=symbol_length.device)
+        # symbol_pred_mask = (symbol_alen[:, None] < (symbol_length[None] - 1)).T # do not predict anything given the last target word (ignore <EOS>)
+        symbol_pred_mask = ~samples["tree_mask_excludingeos"]
+        symbol_y = symbol[:,1:].masked_select(symbol_pred_mask[:,:-1])  # target for text
+        assert len(symbol_y) == (symbol_length - 1).sum().item()
+        bs = symbol.size(0)
+
+        tree_structure = [self.symbol_env.equation_encoder.decode(samples["original_tree"][i]) for i in range(bs)]
+        if self.params.data.use_skeleton:
+            symbol_input = samples["tree_skeleton"]
+            symbol_input_mask = samples["tree_mask_skeleton"]
+            # symbol_input_length = samples["tree_skeleton_length"]
+
+        else:
+            symbol_input = symbol[:,1:-1] # Deleting EOS/BOS
+            symbol_input_mask = samples["tree_mask_excludingeos"][:,1:-1]
+            # symbol_input_length = symbol_length - 2
 
         input_len = self.params.input_len
         input_step = self.params.input_step
@@ -387,8 +405,8 @@ class Trainer(object):
         output_times = t[:, output_start::output_step]  # (bs, output_len)
         spatial_grid = x
 
-        data_input, data_label, input_times, output_times, data_mask, symbol_input, symbol_mask, spatial_grid = to_cuda(
-            (data_input, data_label, input_times, output_times, data_mask, symbol_input, symbol_mask,spatial_grid)
+        data_input, data_label, input_times, output_times, data_mask, symbol, symbol_input, symbol_input_mask, symbol_padding_mask, spatial_grid, symbol_length, symbol_y, symbol_pred_mask= to_cuda(
+            (data_input, data_label, input_times, output_times, data_mask,symbol,  symbol_input,symbol_input_mask, symbol_padding_mask, spatial_grid, symbol_length, symbol_y, symbol_pred_mask)
         )
 
         if self.params.normalize:
@@ -433,7 +451,12 @@ class Trainer(object):
             "data_mask": data_mask,
             "loss_weight": loss_weight,
             "symbol_input": symbol_input,
-            "symbol_mask": symbol_mask,
+            "symbol_input_mask": symbol_input_mask,
+            "symbol_padding_mask": symbol_padding_mask,
+            "symbol": symbol,
+            "symbol_y" : symbol_y,
+            "symbol_pred_mask": symbol_pred_mask,
+            "tree_structure": tree_structure,
             "spatial_grid": spatial_grid
         }
 
@@ -455,9 +478,7 @@ class Trainer(object):
         # prepare data part
         samples = self.get_batch()
 
-        dict= self.prepare_data(
-            samples
-        )
+        dict= self.prepare_data(samples)
 
         # forward / loss
 
@@ -478,16 +499,27 @@ class Trainer(object):
                 input_times=dict["input_times"][..., None],
                 output_times=dict["output_times"][..., None],
                 symbol_input=dict["symbol_input"],
+                symbol = dict["symbol"],
                 query_space_grid = dict["spatial_grid"][..., None] if params.model.data_decoder.full_tx else None,
-                symbol_padding_mask=dict["symbol_mask"],
+                symbol_input_padding_mask=dict["symbol_input_mask"],
+                symbol_padding_mask = dict["symbol_padding_mask"],
+                symbol_pred_mask=dict["symbol_pred_mask"],
+                symbol_y=dict["symbol_y"]
             )  # (bs, output_len, x_num, data_dim)
+
             data_output = output["data_output"]
             data_loss = self.data_loss_fn(data_output, dict["data_label"], dict["data_mask"], dict["loss_weight"])
 
         self.data_loss += data_loss.item()
+        if not self.params.model.no_text_decoder:
+            symbol_loss = output["text_loss"]
 
-        # optimize
-        self.optimize(data_loss)
+            self.symbol_loss += symbol_loss.item()
+
+            # optimize
+            self.optimize(self.params.data_symbol_loss_ratio * data_loss + symbol_loss)
+        else:
+            self.optimize(data_loss)
 
 
         self.inner_epoch += 1

@@ -114,15 +114,28 @@ def main(params: DictConfig):
 
     if params.eval_only:
         stats, _ = evaluator.evaluate()
-        logger.info(
-            "Eval | data loss = {:.8f} | rel l2 = {:.8f} | rel l2 1st_half = {:.8f} | rel l2 2nd_half = {:.8f} | r2 score = {:.8f}".format(
-                stats["data_loss"],
-                stats["_l2_error"],
-                stats["_l2_error_first_half"],
-                stats["_l2_error_second_half"],
-                stats["_r2"]
+        if params.model.no_text_decoder:
+            logger.info(
+                "Eval | data loss = {:.8f} | rel l2 = {:.8f} | rel l2 1st_half = {:.8f} | rel l2 2nd_half = {:.8f} | r2 score = {:.8f}".format(
+                    stats["data_loss"],
+                    stats["_l2_error"],
+                    stats["_l2_error_first_half"],
+                    stats["_l2_error_second_half"],
+                    stats["_r2"]
+                )
             )
-        )
+        else:
+            logger.info(
+                "Eval | data loss = {:.8f} | rel l2 = {:.8f} | rel l2 1st_half = {:.8f} | rel l2 2nd_half = {:.8f} | r2 score = {:.8f} | text loss = {:8f} | valid fraction {:8f}".format(
+                    stats["data_loss"],
+                    stats["_l2_error"],
+                    stats["_l2_error_first_half"],
+                    stats["_l2_error_second_half"],
+                    stats["_r2"],
+                    stats["text_loss"],
+                    stats["valid_fraction"]
+                )
+            )
 
         max_mem = torch.cuda.max_memory_allocated() / 1024**2
         s_mem = " MEM: {:.2f} MB ".format(max_mem)
@@ -138,13 +151,22 @@ def main(params: DictConfig):
 
             if (params.log_periodic > 0) and (trainer.inner_epoch % params.log_periodic == 0):
                 data_loss = trainer.data_loss / params.log_periodic
-                logger.info(
-                    "Epoch {} | step {} | data loss = {:.8f}".format(trainer.epoch, trainer.inner_epoch, data_loss)
-                )
+                symbol_loss = trainer.symbol_loss / params.log_periodic
+                if  params.model.no_text_decoder:
+                    logger.info(
+                        "Epoch {} | step {} | data loss = {:.8f} ".format(trainer.epoch, trainer.inner_epoch, data_loss)
+                    )
+                else:
+                    logger.info(
+                        "Epoch {} | step {} | data loss = {:.8f} | symbol loss = {:8f}".format(trainer.epoch,trainer.inner_epoch,data_loss, symbol_loss)
+                    )
                 if params.use_wandb:
                     wandb.log({"train": {"data_loss": data_loss, "epoch": trainer.epoch, "step": trainer.n_total_iter}})
+                    if not params.model.no_text_decoder:
+                        wandb.log({"train": {"symbol_loss": symbol_loss}})
 
                 trainer.data_loss = 0.0
+                trainer.symbol_loss = 0.0
 
         logger.info(f"============ End of epoch {trainer.epoch} ============")
 
@@ -152,25 +174,43 @@ def main(params: DictConfig):
 
         logger.info("====== STARTING EVALUATION (multi-gpu: {}) =======".format(params.multi_gpu))
         stats, results_per_type = evaluator.evaluate()
-
-        logger.info(
-            "Epoch {} Eval  | data loss = {:.8f} | rel l2 = {:.8f} | rel l2 1st_half = {:.8f} | rel l2 2nd_half = {:.8f}  | r2 score = {:.8f}".format(
-                trainer.epoch,
-                stats["data_loss"],
-                stats["_l2_error"],
-                stats["_l2_error_first_half"],
-                stats["_l2_error_second_half"],
-                stats["_r2"]
+        if params.model.no_text_decoder:
+            logger.info(
+                "Epoch {} Eval  | data loss = {:.8f} | rel l2 = {:.8f} | rel l2 1st_half = {:.8f} | rel l2 2nd_half = {:.8f}  | r2 score = {:.8f}".format(
+                    trainer.epoch,
+                    stats["data_loss"],
+                    stats["_l2_error"],
+                    stats["_l2_error_first_half"],
+                    stats["_l2_error_second_half"],
+                    stats["_r2"]
+                )
             )
-        )
+        else:
+            logger.info(
+                "Epoch {} Eval  | data loss = {:.8f} | rel l2 = {:.8f} | rel l2 1st_half = {:.8f} | rel l2 2nd_half = {:.8f}  | r2 score = {:.8f} | text loss = {:8f} | valid fraction {:8f}".format(
+                    trainer.epoch,
+                    stats["data_loss"],
+                    stats["_l2_error"],
+                    stats["_l2_error_first_half"],
+                    stats["_l2_error_second_half"],
+                    stats["_r2"],
+                    stats["text_loss"],
+                    stats["valid_fraction"]
+                )
+            )
         if params.use_wandb:
             stats["epoch"] = trainer.epoch
             wandb_log = {"val": {k.strip("_"): v for k, v in stats.items()}}
             if params.wandb.log_per_type:
                 for type, results in results_per_type.items():
-                    wandb_log["val"][type] = {
-                        k.strip("_"): v for k, v in results.items() if k in ["_l2_error", "data_loss"]
-                    }
+                    if params.model.no_text_decoder:
+                        wandb_log["val"][type] = {
+                            k.strip("_"): v for k, v in results.items() if k in ["_l2_error", "data_loss"]
+                        }
+                    else:
+                        wandb_log["val"][type] = {
+                            k.strip("_"): v for k, v in results.items() if k in ["_l2_error", "data_loss", "text_loss"]
+                        }
             wandb.log(wandb_log)
 
         trainer.save_best_model(stats)
