@@ -29,9 +29,10 @@ However, if you want to save space/ your evaluation dataset and training dataset
 
 Note you may set ``model.data_decoder.full_tx=false`` to run with a larger batch_size
 
+### Modes
 
+In data configuration, you can enable/disable the skeleton tree input by ``data.use_skeleton=True/False``
 
-## Something to be done (In progress)
+In model configuration, you can include/exclude the text (symbol) encoder/decoder by ``model.no_text_encoder=True/False`` 
+and ``model.no_text_decoder=True/False`` , the default setting is text encoder but no text decoder.
 
-We add symbol_decoder in the model, but it is not complete for the evaluation metrics or so for the symbol part, so we suggest you only 
-use 2-to=1 (data) model for now.
