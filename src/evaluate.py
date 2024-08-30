@@ -214,12 +214,9 @@ class Evaluator(object):
                                 assert np.isfinite(label_outputs).all()
                             try:
                                 if np.isfinite(generated_outputs).all():
-                                    valid_loss.append(
-                                        np.sqrt(
-                                            np.sum((generated_outputs - label_outputs) ** 2)
-                                            / (np.sum(label_outputs ** 2) + eps)
-                                        )
-                                    )
+                                    error = np.sqrt(np.sum((generated_outputs - label_outputs) ** 2)/ (np.sum(label_outputs ** 2) + eps))
+                                    assert error<2** 200
+                                    valid_loss.append(error)
                             except:
                                 continue
                         if len(valid_loss) > 0:
