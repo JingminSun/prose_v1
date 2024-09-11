@@ -18,6 +18,7 @@ generating_mode: 0
 # Length of the input sequence
 input_len: 32
 input_step: 2
+output_start: -1
 
 output_step: 2
 # num of training data in total
@@ -112,6 +113,7 @@ reload_ftmodel: null
 # Reload a pretrained model
 reload_checkpoint: null
 
+plot_worst: False
 
 ### experiment & logging names
 exp_name: debug

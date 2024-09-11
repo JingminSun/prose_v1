@@ -86,6 +86,8 @@ def plot_1d_pde(
     input_step=1,
     output_step=1,
     output_start=None,
+    diff_plot = True,
+    input_plot = True
 ):
     """
     Plot 1D PDE data including input, target, output, and difference.
@@ -109,16 +111,32 @@ def plot_1d_pde(
     input_time = time[:input_len:input_step]
     output_time = time[output_start::output_step]
 
-    num_plots = 4 if output_2 is None else 6
+    if input_plot:
+        num_plots = 3
+    else:
+        num_plots = 2
+    if diff_plot:
+        num_plots += 1
+    if output_2 is not None:
+        num_plots += 2
     fig, axs = plt.subplots(dim, num_plots, figsize=(5 * num_plots, 4.5 * dim))
     if len(axs.shape) == 1:
         axs = axs.reshape(dim, num_plots)
 
     for j in range(dim):
-        # Create the data list considering if output_2 is provided
-        data_list = [input[..., j], target[..., j], output_1[..., j], target[..., j] - output_1[..., j]]
-        titles = ['Input', 'Target', 'Output', 'Diff']
+        if input_plot:
+            # Create the data list considering if output_2 is provided
+            data_list = [input[..., j], target[..., j], output_1[..., j]]
+            titles = ['Input', 'Target', 'Output']
+        else:
+            # Create the data list considering if output_2 is provided
+            data_list = [target[..., j], output_1[..., j]]
+            titles = [ 'Target', 'Output']
+        if diff_plot:
+            data_list.extend([ target[..., j] - output_1[..., j]])
+            titles.extend(['Diff'])
         if output_2 is not None:
+            assert diff_plot
             titles[2] = 'Output_zero_shot'
             titles[3] = 'Diff_zero_shot'
             data_list.extend([output_2[..., j], target[..., j] - output_2[..., j]])
@@ -141,8 +159,8 @@ def plot_1d_pde(
             axs[j, i].set_yticks(y_tick_positions)
             axs[j, i].set_yticklabels(y_tick_labels)
             plt.colorbar(im, ax=axs[j, i])
-
-    plt.suptitle(plot_title, fontsize=20)
+    if plot_title is not None:
+        plt.suptitle(plot_title, fontsize=20)
     plt.tight_layout()
     path = os.path.join(folder, filename + ".png")
     plt.savefig(path)

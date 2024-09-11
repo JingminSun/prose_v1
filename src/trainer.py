@@ -393,10 +393,17 @@ class Trainer(object):
         input_len = self.params.input_len
         input_step = self.params.input_step
         output_step = self.params.output_step
-        if train or output_step == 1:
-            output_start = input_len
+
+        if self.params.output_start==-1:
+            if train or output_step == 1:
+                output_start = input_len
+            else:
+                output_start = input_len + 1
         else:
-            output_start = input_len + 1
+            if train or output_step == 1:
+                output_start =  self.params.output_start
+            else:
+                output_start =  self.params.output_start + 1
 
 
         data_input = data[:, :input_len:input_step]  # (bs, input_len, x_num,  dim)

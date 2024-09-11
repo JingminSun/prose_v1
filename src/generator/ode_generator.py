@@ -97,17 +97,11 @@ class Generator:
         elif mode == -1:
             # term deletion
             assert rng is not None
-            if type == "double_pendulum":
-                return self.double_pendulum_missing_term(type, rng)
-            else:
-                return self.tree_with_missing_term(type, rng)
+            return self.tree_with_missing_term(type, rng)
         elif mode == 1:
             # term addition
             assert rng is not None
-            if type == "double_pendulum":
-                return self.double_pendulum_additional_term(type, rng)
-            else:
-                return self.tree_with_additional_term(type, rng)
+            return self.tree_with_additional_term(type, rng)
         else:
             assert False, "Unknown mode {}".format(mode)
 

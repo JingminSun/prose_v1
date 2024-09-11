@@ -119,7 +119,7 @@ class Evaluator(object):
             if not os.path.isdir(save_folder):
                 os.makedirs(save_folder)
 
-        if params.log_eval_plots > 0:
+        if params.log_eval_plots > 0 or params.plot_worst:
             plot_folder = os.path.join(params.eval_dump_path, f"epoch_{self.trainer.epoch}_{self.params.local_rank}")
             if not os.path.isdir(plot_folder):
                 os.makedirs(plot_folder)
@@ -132,6 +132,7 @@ class Evaluator(object):
             text_valid = 0
             results = defaultdict(list)
 
+            worst_case_pred = 0
 
             for idx, samples in enumerate(loader):
 
@@ -171,6 +172,30 @@ class Evaluator(object):
                 cur_result = compute_metrics(
                     data_output, data_label, metrics=params.validation_metrics_print, batched=True
                 )
+
+                if self.params.plot_worst and np.max(cur_result["_l2_error"]) > worst_case_pred:
+                    worst_case_pred = np.max(cur_result["_l2_error"])
+                    worst_index = np.argmax(cur_result["_l2_error"])
+
+                    # plot_title = "Type {} |  $L^2$ error {:.4f} % ".format(type,cur_result[ "_l2_error"][worst_index] * 100)
+                    path = plot_1d_pde(
+                        data_output[worst_index].float().numpy(force=True),
+                        None,
+                        samples["t"][worst_index],
+                        samples["x"][worst_index],
+                        samples["data"][worst_index].numpy(force=True),
+                        params.input_len,
+                        None,
+                        filename=f"{type}_plot_worst",
+                        folder=plot_folder,
+                        dim=params.data[type].dim,
+                        input_step=params.input_step,
+                        output_step=params.output_step,
+                        output_start=params.input_len if params.output_step == 1 else params.input_len + 1,
+                        diff_plot=False,
+                        input_plot=False
+                    )
+
 
                 if not params.model.no_text_decoder:
                     symbol_output = output_dict["symbol_generated"]
