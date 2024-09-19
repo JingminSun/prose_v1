@@ -16,10 +16,13 @@ For test runs:
 
     bash scripts/run.sh
 
-For the code in the paper  [Time-Series Forecasting, Knowledge Distillation, and Refinement within a Multimodal PDE Foundation Model](https://arxiv.org/abs/2409.11609):
+For the experiments in the paper  [Time-Series Forecasting, Knowledge Distillation, and Refinement within a Multimodal PDE Foundation Model](https://arxiv.org/abs/2409.11609):
     
     bash scripts/sympy.sh
 
+For the experiments in the paper  [Towards a Foundation Model for Partial Differential Equations: Multi-Operator Learning and Extrapolation](https://arxiv.org/abs/2404.12355):
+
+    bash scripts/pde_experiments.sh
 
 ### Data
 
