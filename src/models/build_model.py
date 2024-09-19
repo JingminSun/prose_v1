@@ -49,8 +49,8 @@ def build_model(params, model_config, data_config, symbol_env):
 
 
     # log
-    for k, v in modules.items():
-        logger.info(f"{k}: {v}")
+    # for k, v in modules.items():
+    #     logger.info(f"{k}: {v}")
     for k, v in modules.items():
         s = f"Number of parameters ({k}): {sum([p.numel() for p in v.parameters() if p.requires_grad]):,}"
         if hasattr(v, "summary"):

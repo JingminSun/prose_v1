@@ -8,11 +8,9 @@ from abc import ABC, abstractmethod
 import numpy as np
 from symbol_utils.node_utils import Node, NodeList
 
-
-def chunks(lst, n):
-    """Yield successive n-sized chunks from lst."""
-    for i in range(0, len(lst), n):
-        yield lst[i : i + n]
+from sympy.parsing.sympy_parser import untokenize, generate_tokens, parse_expr
+import io
+import sympy as sy
 
 
 class Encoder(ABC):
@@ -46,10 +44,11 @@ class FloatSequences(Encoder):
         self.mantissa_len = params.mantissa_len
         self.max_exponent = params.max_exponent
         self.base = (self.float_precision + 1) // self.mantissa_len
-        self.max_token = 10**self.base
+        self.max_token = 10 ** self.base
         self.symbols = ["+", "-"]
         self.symbols.extend(["N" + f"%0{self.base}d" % i for i in range(self.max_token)])
-        self.symbols.extend(["E" + str(i) for i in range(-self.max_exponent, self.max_exponent + 1)])
+        self.symbols.extend(
+            ["E" + str(i) for i in range(-self.max_exponent, self.max_exponent + 1)])
 
     def encode(self, values):
         """
@@ -99,7 +98,7 @@ class FloatSequences(Encoder):
                     mant += x[1:]
                 mant = int(mant)
                 exp = int(val[-1][1:])
-                value = sign * mant * (10**exp)
+                value = sign * mant * (10 ** exp)
                 value = float(value)
             except Exception:
                 value = np.nan
@@ -164,6 +163,104 @@ class Equation(Encoder):
                 res.append(elem)
         return res
 
+    def sympy_encoder(self, str_expr):
+        expr = sy.sympify(str_expr)
+        formatted_expr = format_float_coefficients(expr)
+        expression_str = str(formatted_expr)
+        tokens = list(generate_tokens(io.StringIO(expression_str).readline))
+
+        # all this is putting the PROSE float encoder into it.
+        res = []
+        i = 0
+        for token in tokens:
+            if token == 0:
+                continue
+            try:
+                token_str = token.string
+                val = float(token_str)
+                if token_str.lstrip("-").isdigit():
+                    # res.extend(write_int(int(token_str)))
+                    res.extend(token_str)
+                else:
+                    res.extend(self.float_encoder.encode(np.array([val])))
+            except ValueError:
+                if token_str == '-':
+                    try:
+                        token_str_float = float(tokens[i + 1].string)
+                        token_str = token_str + str(token_str_float)
+                        res.extend(self.float_encoder.encode(np.array([float(token_str)])))
+                        tokens[i + 1] = 0
+                        i = i + 2
+                        continue
+                    except ValueError:
+                        pass
+                elif token_str.startswith('u'):
+                    for j in range(5):
+                        token_str = token_str + tokens[i + j + 1].string
+                        tokens[i + j + 1] = 0
+                    res.append(token_str)
+                    i = i + 6
+                    continue
+                elif token_str == '':
+                    i = i + 1
+                    continue
+                res.append(token_str)
+            i += 1
+
+        return res
+
+    def sympy_encoder_with_placeholder(self, str_expr):
+        placeholder_value = 'PLACEHOLDER'
+        str_expr = str_expr.replace('<PLACEHOLDER>', placeholder_value)
+
+        expr = sy.sympify(str_expr)
+        expression_str = str(expr)
+        tokens = list(generate_tokens(io.StringIO(expression_str).readline))
+
+        # all this is putting the PROSE float encoder into it.
+        res = []
+        i = 0
+        for token in tokens:
+            if token == 0:
+                continue
+            try:
+                token_str = token.string
+                val = float(token_str)
+                if token_str.lstrip("-").isdigit():
+                    # res.extend(write_int(int(token_str)))
+                    res.extend(token_str)
+                else:
+                    res.append("<PLACEHOLDER>")
+            except ValueError:
+                if token_str == '-':
+                    try:
+                        token_str_float = float(tokens[i + 1].string)
+                        token_str = token_str + str(token_str_float)
+                        res.append('<PLACEHOLDER>')
+                        tokens[i + 1] = 0
+                        i = i + 2
+                        continue
+                    except ValueError:
+                        pass
+                elif token_str.startswith('u'):
+                    for j in range(5):
+                        token_str = token_str + tokens[i + j + 1].string
+                        tokens[i + j + 1] = 0
+                    res.append(token_str)
+                    i = i + 6
+                    continue
+                elif token_str.startswith("PLACE"):
+                    res.append("<PLACEHOLDER>")
+                    i = i + 1
+                    continue
+                elif token_str == '':
+                    i = i + 1
+                    continue
+                res.append(token_str)
+            i += 1
+
+        return res
+
     def _decode(self, lst):
         """
         Decode list of symbols in prefix notation into a tree
@@ -197,6 +294,8 @@ class Equation(Encoder):
             return Node(lst[0], self.params), 1
         elif lst[0] in self.symbols:
             return Node(lst[0], self.params), 1
+        elif lst[0] == "<PLACEHOLDER>":
+            return Node(lst[0], self.params), 1
         else:
             try:
                 float(lst[0])  # if number, return leaf
@@ -204,11 +303,45 @@ class Equation(Encoder):
             except:
                 return None, 0
 
+    def sympy_decode(self, lst):
+        """
+        Decode a list of symbols in prefix notation into a Sympy expression.
+        """
+        equations = []
+        if len(lst) == 0:
+            return None, 0
+        elif "OOD" in lst[0]:
+            return None, 0
+        else:
+            str_sympy = ""
+            for tok in lst:
+                if tok.startswith("N"):
+                    try:
+                        float(tok.lstrip("N"))
+                        tok = tok.lstrip("N")  # if the float_encoder adds the N.
+                    except:
+                        pass
+                elif tok == "|":
+                    untokenized_expr = sy.sympify(str_sympy)
+                    equations.append(untokenized_expr)
+                    str_sympy = ""
+                    tok = ""
+                elif tok =="<PLACEHOLDER>":
+                    tok = "PLACEHOLDER"
+                elif tok == "<EOS>":
+                    break
+                str_sympy = str_sympy + tok
+            # print(str_sympy)
+            untokenized_expr = sy.sympify(str_sympy)
+            equations.append(untokenized_expr)
+            return equations
+
     def split_at_value(self, lst, value):
         indices = [i for i, x in enumerate(lst) if x == value]
         res = []
-        for start, end in zip([0, *[i + 1 for i in indices]], [*[i - 1 for i in indices], len(lst)]):
-            res.append(lst[start : end + 1])
+        for start, end in zip([0, *[i + 1 for i in indices]],
+                              [*[i - 1 for i in indices], len(lst)]):
+            res.append(lst[start: end + 1])
         return res
 
     def decode(self, lst):
@@ -265,3 +398,29 @@ class Equation(Encoder):
                 break
         res.append("INT-" if neg else "INT+")
         return res[::-1]
+
+
+def format_float_coefficients(expr):
+    # Extract the terms and their coefficients
+    terms = expr.as_ordered_terms()
+    coefficients = [term.as_coeff_Mul()[0] for term in terms]
+
+    # Format the coefficients: only convert floats to scientific notation
+    formatted_coefficients = [
+        '{:.2e}'.format(coef.evalf()) if coef.is_Float else str(coef)
+        for coef in coefficients
+    ]
+
+    # Reconstruct the expression with formatted coefficients
+    formatted_expr = ' + '.join(
+        f'{formatted_coef}*{term.as_coeff_Mul()[1]}' if term.as_coeff_Mul()[
+                                                            1] != 1 else formatted_coef
+        for formatted_coef, term in zip(formatted_coefficients, terms)
+    )
+
+    return formatted_expr
+
+def chunks(lst, n):
+    """Yield successive n-sized chunks from lst."""
+    for i in range(0, len(lst), n):
+        yield lst[i : i + n]

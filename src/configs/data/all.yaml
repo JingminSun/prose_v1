@@ -13,9 +13,9 @@ x_range:
   - 0
   - 2
 
-use_skeleton: false
 space_dim: 1
-directory: /home/shared/prose/sep_types
+#directory: /home/shared/prose/sep_types
+directory: dataset/
 eval_data: null
 train_data: null
 train_data_pairs: null

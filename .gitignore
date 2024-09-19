@@ -1,6 +1,9 @@
 checkpoint/
 dataset/
+dataset_swapprose/
+dataset_sample/
 wandb/
+plot/
 __pycache__/
 *.pyc
 .idea/

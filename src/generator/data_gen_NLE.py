@@ -559,23 +559,6 @@ def burgers_f(
     return uu.reshape([1,numbers,it_tot,nx])
 
 
-#
-# def burgers(cfg):
-#     # basic parameters
-#     xR = cfg['xR']
-#     xL = cfg['xL']
-#     nx = cfg['nx']
-#     ini_time = cfg['ini_time']
-#     fin_time = cfg['fin_time']
-#     dt_save = cfg['dt_save']
-#     CFL = cfg['CFL']
-#     numbers = cfg['numbers']
-#     show_steps = cfg['show_steps']
-#     epsilon = cfg['epsilon']
-#     init_key = cfg['init_key']
-#
-#     return burgers_f(xR, xL, nx, ini_time, fin_time, dt_save, CFL, numbers, show_steps, init_key,epsilon)
-
 
 @partial(jax.jit, static_argnums=(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 18, 21, 22, 23))
 def CFD_f(

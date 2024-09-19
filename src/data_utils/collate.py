@@ -137,6 +137,7 @@ def custom_collate(max_data_dim,symbol_env):
                         batch_tree.append(d[k])
                     collated_tree, lengths,max_length = collate_symbols_nobeos(batch_tree,symbol_env)
                     res[k] = collated_tree
+                    res["original_tree_skeleton"] = batch_tree
                     res["tree_skeleton_length"] = lengths
                     res["tree_mask_skeleton"] = get_padding_mask(lengths,max_length, beos_added = False)
                 else:
@@ -147,6 +148,7 @@ def custom_collate(max_data_dim,symbol_env):
                         cur_data = d[k]
                         collated_tree, lengths,max_length = collate_symbols_nobeos(cur_data,symbol_env)
                         res[k].append(collated_tree)
+                        res["original_tree_skeleton"].append(cur_data)
                         res["tree_skeleton_length"].append(lengths)
                         res["tree_mask_skeleton"].append(get_padding_mask(lengths,max_length, beos_added = False))
 

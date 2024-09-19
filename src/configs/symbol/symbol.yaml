@@ -10,6 +10,13 @@ max_int: 20
 # Number of digits in the mantissa
 float_precision: 2
 
+use_skeleton: false
+
+swapping: false
+
+refine: false
+
+all_type: false
 # Number of tokens for the mantissa (must be a divisor of float_precision+1)
 mantissa_len: 1
 

@@ -140,6 +140,8 @@ class generateDataset(Dataset):
         sample["tree"] = self.item["tree"]
         sample["data"] = data
         sample["tree_encoded"] = self.item["tree_encoded"]
+        if self.config.symbol.all_type:
+            sample["tree_encoded_sympy"] = self.item["tree_encoded_sympy"]
 
         return sample
 
@@ -252,6 +254,9 @@ def main(params):
                 outputs["type"] = samples["type"][i]
 
                 outputs["tree_encoded"] = samples["tree_encoded"][i]
+
+                if params.symbol.all_type:
+                    outputs["tree_encoded_sympy"] = samples["tree_encoded_sympy"][i]
 
                 cur_data = samples["data"][i]
 

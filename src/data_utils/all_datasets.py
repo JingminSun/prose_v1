@@ -215,12 +215,25 @@ class MultiPDE(Dataset):
             ).float()
 
             for key in cur_data.keys():
-                if key != data:
+                if key != "data":
                     x[key] = copy.deepcopy(cur_data[key])
-            if self.params.data.use_skeleton:
-                x["tree_skeleton"]=self.symbol_env.generator.generator.get_skeleton_tree(
-                            x["type"], mode=0, rng=self.symbol_env.rng
-                        )
+            if self.params.symbol.use_sympy and "tree_encoded_sympy" in x.keys():
+                x["tree_encoded"] =  x["tree_encoded_sympy"]
+                del x["tree_encoded_sympy"]
+            if self.params.symbol.use_skeleton:
+                mode = 0
+                if self.params.symbol.swapping:
+                    mode = 2
+                elif self.params.symbol.noisy_text_input:
+                    mode = self.rng.integers(2)
+                    # mode = 1
+                if self.params.symbol.use_sympy:
+                    x["tree_skeleton"] = self.symbol_env.generator.generator.get_sympy_skeleton_tree(
+                        x["type"], mode=mode, rng=self.rng)
+                else:
+                    x["tree_skeleton"] = self.symbol_env.generator.generator.get_skeleton_tree(
+                        x["type"], mode=mode, rng=self.rng
+                    )
             processed_data.append(x)
 
         return processed_data

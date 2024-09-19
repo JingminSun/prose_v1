@@ -379,10 +379,29 @@ class Trainer(object):
         assert len(symbol_y) == (symbol_length - 1).sum().item()
         bs = symbol.size(0)
 
-        tree_structure = [self.symbol_env.equation_encoder.decode(samples["original_tree"][i]) for i in range(bs)]
-        if self.params.data.use_skeleton:
+        if self.params.symbol.use_sympy:
+            tree_structure = [self.symbol_env.equation_encoder.sympy_decode(samples["original_tree"][i])
+                              for i in range(bs)]
+        else:
+            tree_structure = [self.symbol_env.equation_encoder.decode(samples["original_tree"][i]) for i in range(bs)]
+        if self.params.symbol.use_skeleton:
             symbol_input = samples["tree_skeleton"]
             symbol_input_mask = samples["tree_mask_skeleton"]
+            if self.params.symbol.use_sympy:
+                input_structure = []
+                for i in range(bs):
+                    try:
+                        structre = self.symbol_env.equation_encoder.sympy_decode(samples["original_tree_skeleton"][i])
+                        input_structure.append(structre)
+                    except:
+                        raw = ''.join(samples["original_tree_skeleton"][i])
+                        input_structure.append(raw)
+            else:
+                input_structure = []
+                for i in range(bs):
+                    structre =  self.symbol_env.equation_encoder.decode(samples["original_tree_skeleton"][i])
+                    raw = ''.join(samples["original_tree_skeleton"][i])
+                    input_structure.append(structre) if structre is not None else input_structure.append(raw)
             # symbol_input_length = samples["tree_skeleton_length"]
 
         else:
@@ -464,7 +483,8 @@ class Trainer(object):
             "symbol_y" : symbol_y,
             "symbol_pred_mask": symbol_pred_mask,
             "tree_structure": tree_structure,
-            "spatial_grid": spatial_grid
+            "input_structure":input_structure if self.params.symbol.use_skeleton else None,
+            "spatial_grid": spatial_grid,
         }
 
         return dict

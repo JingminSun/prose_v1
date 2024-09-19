@@ -136,6 +136,10 @@ def main(params: DictConfig):
                     stats["valid_fraction"]
                 )
             )
+            if params.symbol.refine:
+                logger.info(
+                    "text_loss_ref:{:.8f}".format(stats["text_loss_ref"])
+                )
 
         max_mem = torch.cuda.max_memory_allocated() / 1024**2
         s_mem = " MEM: {:.2f} MB ".format(max_mem)
@@ -198,6 +202,10 @@ def main(params: DictConfig):
                     stats["valid_fraction"]
                 )
             )
+            if params.symbol.refine:
+                logger.info(
+                    "text_loss_ref:{.8f}".format(stats["text_loss_ref"])
+                )
         if params.use_wandb:
             stats["epoch"] = trainer.epoch
             wandb_log = {"val": {k.strip("_"): v for k, v in stats.items()}}

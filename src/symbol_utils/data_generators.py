@@ -78,13 +78,16 @@ class RandomFunctions:
             + [f"uxx_{i}" for i in range(self.max_output_dimension)]
             + [f"uxxx_{i}" for i in range(self.max_output_dimension)]
             + [f"uxxxx_{i}" for i in range(self.max_output_dimension)]
+            + ["u_0(x,t)"]
             + ["x"]
+            + ["t"]
         )
         self.symbols = (
             list(self.operators)
             + self.constants
             + self.variables
             + ["|", "INT+", "INT-", "FLOAT+", "FLOAT-", "pow", "0"]
+            + ["(", ")", "+", "-", ",", "*", "**", "Derivative"]
         )
         self.constants.remove("CONSTANT")
 
@@ -95,7 +98,7 @@ class RandomFunctions:
         self.equation_words = sorted(list(set(self.symbols)))
         self.equation_words = special_words + self.equation_words
 
-        if self.generating_mode or self.params.data.use_skeleton:
+        if self.generating_mode or self.params.symbol.use_skeleton:
             self.generator = PDEGenerator(
                 self.params,
                 self.float_encoder,

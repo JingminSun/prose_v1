@@ -3,7 +3,8 @@ import numpy as np
 from numpy.polynomial import polynomial as P
 from logging import getLogger
 from scipy.integrate import solve_ivp
-
+import sympy as sy
+import random
 logger = getLogger()
 
 from symbol_utils.node_utils import Node, NodeList
@@ -55,7 +56,7 @@ class Generator:
 
             # generate terms to be added (polynomials of degree at most 2)
             self.addition_terms = dict()
-            for dim in range(self.params.min_output_dimension, self.params.max_output_dimension + 1):
+            for dim in range(self.params.data.min_output_dimension, self.params.data.max_output_dimension + 1):
                 cur_addition_terms = [Node(self.ph, p)]
 
                 for i in range(dim):
@@ -102,6 +103,30 @@ class Generator:
             # term addition
             assert rng is not None
             return self.tree_with_additional_term(type, rng)
+        elif mode == 2:
+            # term swapping
+            assert rng is not None
+            return self.tree_with_swapping_term(type, rng)
+        else:
+            assert False, "Unknown mode {}".format(mode)
+
+    def get_sympy_skeleton_tree(self, type, mode=0, rng=None):
+        """
+        Generate skeleton tree for text input, with possibly added/deleted terms
+        """
+
+        expr = getattr(self, type + "_tree_list")()
+        if mode == 0:
+            # no text noise
+            if type not in self.tree_skeletons:
+                tree_skeleton = self.equation_encoder.sympy_encoder_with_placeholder(expr)
+                self.tree_skeletons[type] = tree_skeleton
+            return self.tree_skeletons[type]
+        # Currently no deletion as PDEs only really have 2-4 terms anyway.
+        elif mode == 1:
+            # term addition
+            assert rng is not None
+            return self.sympy_tree_with_additional_term(type,expr, rng)
         else:
             assert False, "Unknown mode {}".format(mode)
 
@@ -132,9 +157,14 @@ class Generator:
         else:
             op_list[i].insert(j - 1, "add")
             term_list[i].insert(j, term_to_add)
-        tree = self.tree_from_list(op_list, term_list)
-        return self.equation_encoder.encode_with_placeholder(tree)
+        return self.tree_with_swapping_term(type, rng, lists= [op_list,term_list])
+        # tree = self.tree_from_list(op_list, term_list)
+        # return self.equation_encoder.encode_with_placeholder(tree)
 
+    def sympy_tree_with_additional_term(self, type, expr, rng):
+        term_to_add = rng.choice(self.addition_terms[self.type_to_dim[type]])
+        new_expr = expr + '+' + term_to_add
+        return self.equation_encoder.sympy_encoder_with_placeholder(new_expr)
     def tree_with_missing_term(self, type, rng):
         op_list, term_list = getattr(self, type + "_tree_list")()
 
@@ -164,6 +194,45 @@ class Generator:
 
         tree = self.tree_from_list(op_list, term_list)
         return self.equation_encoder.encode_with_placeholder(tree)
+
+    def tree_with_swapping_term(self, type, rng, lists= None):
+
+        if lists is None:
+            op_list, term_list = getattr(self, type + "_tree_list")()
+        else:
+            op_list, term_list = lists
+        op_list, term_list = self.full_tree_with_swapping_term(op_list, term_list, rng)
+        tree = self.tree_from_list(op_list, term_list)
+        return self.equation_encoder.encode_with_placeholder(tree)
+
+    def full_tree_with_swapping_term(self,op_list,term_list,rng):
+        op_list = op_list[0]
+        term_list = term_list[0]
+
+        for i in range(len(op_list)):
+            if op_list[i] == "add":
+                choice = rng.integers(2)
+                if choice == 1:
+                    term1 = term_list[i]
+                    term2 = term_list[i + 1]
+                    term_list[i] = term2
+                    term_list[i + 1] = term1
+            elif op_list[i] == "sub":
+                choice = rng.integers(2)
+                if choice == 1:
+                    term_lst_tup = tuple(term_list)
+                    term1 = term_lst_tup[i]
+                    term2 = term_lst_tup[i + 1]
+                    child_lst = []
+                    for child in term2.children:
+                        child_lst.append(str(child))
+                    child_lst.append(str(-1))
+                    new_term2 = self.mul_terms(child_lst)
+                    term_list[i] = new_term2
+                    term_list[i + 1] = term1
+                    op_list[i] = "add"
+        return [op_list], [term_list]
+
 
     def refine_floats(self, lst):
         """

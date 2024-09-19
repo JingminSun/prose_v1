@@ -68,7 +68,13 @@ class SymbolicEnvironment:
             else:
                 return np.array(m)
         else:
-            m = self.equation_encoder.decode(words)
+            if self.params.symbol.use_sympy:
+                try:
+                    m = self.equation_encoder.sympy_decode(words)
+                except:
+                    m = "EMPTY"
+            else:
+                m = self.equation_encoder.decode(words)
             if m is None:
                 return None
             if str_array:
@@ -106,12 +112,28 @@ class SymbolicEnvironment:
             return item, ["data generation error"]
 
         if "tree_encoded" not in item:
-            tree_encoded = self.equation_encoder.encode(tree)
-            assert all([x in self.equation_word2id for x in tree_encoded]), "tree: {}\n encoded: {}".format(
-                tree, tree_encoded
-            )
-
-            item["tree_encoded"] = tree_encoded
+            if self.params.symbol.use_sympy or self.params.symbol.all_type:
+                try:
+                    tree_sympy = item["tree_sympy"]
+                    tree_encoded = self.equation_encoder.sympy_encoder(tree_sympy)
+                    assert all([x in self.equation_word2id for x in
+                                tree_encoded]), "tree: {}\n encoded: {}".format(
+                        tree_sympy, tree_encoded
+                    )
+                    item["tree_encoded_sympy"] = tree_encoded
+                except:
+                    tree_encoded = self.equation_encoder.sympy_encoder(tree)
+                    assert all([x in self.equation_word2id for x in
+                                tree_encoded]), "tree: {}\n encoded: {}".format(
+                        tree, tree_encoded
+                    )
+                    item["tree_encoded"] = tree_encoded
+            if not self.params.symbol.use_sympy or self.params.symbol.all_type:
+                tree_encoded = self.equation_encoder.encode(tree)
+                assert all([x in self.equation_word2id for x in tree_encoded]), "tree: {}\n encoded: {}".format(
+                    tree, tree_encoded
+                )
+                item["tree_encoded"] = tree_encoded
 
         return item, []
 

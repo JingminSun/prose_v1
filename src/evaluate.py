@@ -3,6 +3,10 @@ import numpy as np
 from logging import getLogger
 from collections import defaultdict
 import copy
+import sympy as sy
+from generator.data_gen_NLE import burgers_f
+import scipy
+from jax import numpy as jnp
 
 import torch
 from torch.utils.data import DataLoader
@@ -78,7 +82,18 @@ class Evaluator(object):
         coeff = np.random.uniform(-5, 5, size=(8, self.params.data.max_input_dimension))
         # Create mesh grids
         T, X = np.meshgrid(t_grid, x_grid, indexing="ij")
-
+        self.T, self.X = T,X
+        x,t = sy.symbols('x t')
+        u = sy.Function('u_0')(x, t)
+        tens_poly = (coeff[0, 0] + coeff[1, 0] * t + coeff[2, 0] * t ** 2) * (
+                coeff[3, 0] + coeff[4, 0] * x + coeff[5, 0] * x ** 2 + coeff[6, 0] * x ** 3 + coeff[
+            7, 0] * x ** 4)
+        self.sympy_sybol = {
+            "u": u,
+            "x":x,
+            "t":t,
+            "tens_poly":tens_poly
+        }
         input_points = np.zeros((self.params.data.max_input_dimension, self.params.data.t_num, self.params.data.x_num, 8))
         for i in range(self.params.data.max_input_dimension):
             input_points[i, :, :, 0] = (coeff[0, i] + coeff[1, i] * T + coeff[2, i] * T ** 2) * (
@@ -168,6 +183,8 @@ class Evaluator(object):
                     data_output = data_output * (dict["std"] + eps) + dict["mean"]
                     data_label = dict["data_label"] * (dict["std"] + eps) + dict["mean"]
 
+                    raw_data = dict["data_input"] * (dict["std"] + eps) + dict["mean"]
+
 
                 cur_result = compute_metrics(
                     data_output, data_label, metrics=params.validation_metrics_print, batched=True
@@ -200,6 +217,9 @@ class Evaluator(object):
                 if not params.model.no_text_decoder:
                     symbol_output = output_dict["symbol_generated"]
                     min_loss_save = []
+                    min_loss_save_ref = []
+                    valid_ref_gen_l2 = []
+                    valid_orig_gen_l2 = []
 
                     symbol_output = symbol_output.unsqueeze(-1)
                     symbol_output = (
@@ -222,26 +242,58 @@ class Evaluator(object):
                         tree_list = symbol_output[i]
                         label_outputs = None
                         valid_loss = []
+                        valid_refined_loss=[]
 
                         for tree in tree_list:
-                            try:
-                                generated_outputs = tree.val(self.input_points, self.space_dim)
+                            if self.params.symbol.use_sympy:
+                                try:
+                                    expr = tree[0]
+                                    expr_copy = expr
+                                    equation = sy.sympify(expr)
+                                    expr = equation.subs(self.sympy_sybol["u"],
+                                                         self.sympy_sybol["tens_poly"])
+                                    eval_expr = sy.lambdify(
+                                        [self.sympy_sybol["x"], self.sympy_sybol["t"]], expr.doit(),
+                                        "numpy")
+                                    generated_outputs = eval_expr(self.X, self.T)
+                                    if self.params.symbol.refine:
+                                        init_variable, fluxx, viscous = self.init_param(expr_copy)
+                                        refined_expr_org, generated_data_ref = self.refinement(expr_copy,raw_data[i],init_variable, fluxx, viscous )
 
-                            except:
-                                continue
+                                        equation = sy.sympify(refined_expr_org)
+                                        refined_expr = equation.subs(self.sympy_sybol["u"], self.sympy_sybol["tens_poly"])
+                                        eval_expr = sy.lambdify([self.sympy_sybol["x"], self.sympy_sybol["t"]], refined_expr.doit(), "numpy")
+                                        generate_refined_output = eval_expr(self.X, self.T)
+                                except:
+                                    continue
+                            else:
+                                try:
+                                    generated_outputs = tree.val(self.input_points, self.space_dim)
+
+                                except:
+                                    continue
 
                             if label_outputs is None:
-                                # if self.space_dim == 0:
-                                #     label_outputs = tree[i].val(input_points)
-                                # else:
-                                #     label_outputs = tree[i].val(t_grid, x_grid,coeff)
-                                label_outputs = dict["tree_structure"][i].val(self.input_points, self.space_dim)
+                                if self.params.symbol.use_sympy:
+                                    tree_expr =  str(dict["tree_structure"][i])
+
+                                    original_expr = sy.sympify(tree_expr)[0]
+                                    original_expr = original_expr.subs(self.sympy_sybol["u"], self.sympy_sybol["tens_poly"])
+                                    eval_expr = sy.lambdify([self.sympy_sybol["x"], self.sympy_sybol["t"]], original_expr.doit(), "numpy")
+                                    label_outputs = eval_expr(self.X, self.T)
+                                else:
+                                    label_outputs = dict["tree_structure"][i].val(self.input_points, self.space_dim)
                                 assert np.isfinite(label_outputs).all()
                             try:
                                 if np.isfinite(generated_outputs).all():
                                     error = np.sqrt(np.sum((generated_outputs - label_outputs) ** 2)/ (np.sum(label_outputs ** 2) + eps))
-                                    assert error<2** 200
+                                    assert error< 100
                                     valid_loss.append(error)
+                                    if self.params.symbol.refine:
+                                        error_refined = np.sqrt(
+                                            np.sum((generate_refined_output - label_outputs) ** 2) / (
+                                                        np.sum(label_outputs ** 2) + eps))
+                                        valid_refined_loss.append(error_refined)
                             except:
                                 continue
                         if len(valid_loss) > 0:
@@ -249,22 +301,62 @@ class Evaluator(object):
                             min_loss = min(valid_loss)
                             text_valid += 1
                             min_loss_save.append(min_loss)
+                            if self.params.symbol.refine:
+                                min_loss_ref = min(valid_refined_loss)
+                                min_loss_save_ref.append(min_loss_ref)
+                            if self.params.symbol.use_sympy:
 
+                                if self.params.symbol.refine:
+                                    original_exp = self.generated_symbol(self.params,
+                                                                         raw_data[i][0, :,
+                                                                         0].cpu().numpy(),
+                                                                         init_variable, fluxx=fluxx,
+                                                                         viscous=viscous)
+                                    result_org = compute_metrics(
+                                        to_cuda(torch.from_numpy(
+                                            original_exp.reshape(data_label[i].size()))),
+                                        data_label[i],
+                                        metrics="_l2_error", batched=False
+                                    )
+
+                                    valid_orig_gen_l2.append(result_org["_l2_error"])
+                                    result_ref = compute_metrics(
+                                        to_cuda(torch.from_numpy(
+                                            generated_data_ref.reshape(data_label[i].size()))),
+                                        data_label[i],
+                                        metrics="_l2_error", batched=False
+                                    )
+                                    valid_ref_gen_l2.append(result_ref["_l2_error"])
                             if params.print_outputs:
-                                if i % 50 == 0:
+                                logger.info(
+                                    "[{}] Text loss: {:.4f}".format(
+                                        i, min_loss
+                                    )
+                                )
+                                if self.params.symbol.refine:
                                     logger.info(
-                                        "[{}] Text loss: {:.4f}".format(
-                                            i, min_loss
+                                        "Refined loss: {:.4f}".format(
+                                             min_loss_ref
                                         )
                                     )
-                                    # logger.info("Input:     {}".format(text_seqs[i]))
-                                    logger.info("Target:    {}".format(dict["tree_structure"][i][i]))
-                                    try:
+                                logger.info("Input:     {}".format(dict["input_structure"][i]))
+                                logger.info("Target:    {}".format(dict["tree_structure"][i]))
+                                try:
+                                    if self.params.symbol.refine:
+                                        logger.info("Generated: {}".format(tree_list[0]))
+                                        logger.info("Refined: {}\n".format(refined_expr_org))
+                                    else:
                                         logger.info("Generated: {}\n".format(tree_list[0]))
-                                    except:
-                                        # logger.info("Generated: {}\n".format(tree_list[1]))
-                                        pass
+
+                                except:
+                                    # logger.info("Generated: {}\n".format(tree_list[1]))
+                                    pass
                     results["text_loss"].extend(min_loss_save)
+                    if self.params.symbol.refine:
+                        results["text_loss_ref"].extend(min_loss_save_ref)
+                        if self.params.symbol.use_sympy:
+                            results["orig_gen_l2"].extend(valid_orig_gen_l2)
+                            results["ref_gen_l2"].extend(valid_ref_gen_l2)
                 for k in cur_result.keys():
                     keys = k
                     if k == "_r2":
@@ -285,7 +377,7 @@ class Evaluator(object):
 
 
                         plot_1d_pde(
-                            data_loss[i],
+                            data_output[i] if isinstance(data_output, np.ndarray) else data_output[i] .float().numpy(force=True),
                             None,
                             samples["t"][i],
                             samples["x"][i],
@@ -388,7 +480,7 @@ class Evaluator(object):
                     ratio = (self.params.data.max_output_dimension / self.params.data[type].dim) ** 0.5
                     res_mean_type[k] = v / results["size"] * ratio
                     stats[k] += v * ratio
-                elif k == "text_loss":
+                elif k.startswith("text_loss") or k== "orig_gen_l2" or k=="ref_gen_l2":
                     res_mean_type[k] = v / max(results["text_valid"],1)
                     stats[k] += v
                 elif k == "text_valid":
@@ -399,13 +491,16 @@ class Evaluator(object):
                     res_mean_type[k] = v / results["size"]
                     stats[k] += v
             results_per_type[type] = res_mean_type
-        stats = {k: v if k=="_r2" else v/max(total_valid,1) if k=="text_loss" else v / total_size for k, v in stats.items()}
+        stats = {k: v if k=="_r2" else v/max(total_valid,1) if k.startswith("text_loss") else v / total_size for k, v in stats.items()}
 
         # report metrics per equation type as a table
         if self.params.model.no_text_decoder:
             headers = ["type", "dim", "size", "data_loss"] + [k for k in self.validation_metrics]
         else:
             headers = ["type", "dim", "size", "data_loss"] + [k for k in self.validation_metrics] + [ "text_loss","valid_fraction"]
+            if self.params.symbol.use_sympy:
+                if self.params.symbol.refine:
+                    headers = headers + ["orig_gen_l2","text_loss_ref" ,"ref_gen_l2"]
         table = []
         for type, results in results_per_type.items():
             row = [type, self.params.data[type].dim]
@@ -422,4 +517,222 @@ class Evaluator(object):
 
         return stats, results_per_type
 
+    def init_param(self,expr):
+        p = self.params
+        x, t = sy.symbols('x t')
+        u = sy.Function('u_0')(x, t)
 
+
+        try:
+            init_flux = float(expr.coeff(u * sy.diff(u, x)))
+            assert init_flux != 0
+            fluxx = "quadratic"
+        except:
+            try:
+                init_flux = float(expr.coeff(u ** 2 * sy.diff(u, x)))
+                assert init_flux != 0
+                fluxx = "cubic"
+            except:
+                try:
+                    init_flux = float(expr.coeff(sy.cos(u) * sy.diff(u, x)))
+                    assert init_flux != 0
+                    fluxx = "sin"
+                except:
+                    raise NotImplementedError
+        # if type == "inviscid_burgers":
+        #     try:
+        #         expr = sy.sympify(expr)
+        #         expr = expr.doit()
+        #         init_variable = float(expr.coeff(u * sy.diff(u, x)))
+        #         fluxx = "quadratic"
+        #         viscous = False
+        #     except:
+        #         raise "Initial Value not found"
+        # elif type == "inviscid_conservation_cubicflux":
+        #     try:
+        #         expr = sy.sympify(expr)
+        #         expr = expr.doit()
+        #         init_variable = float(expr.coeff(u ** 2 * sy.diff(u, x)))
+        #         fluxx = "cubic"
+        #         viscous = False
+        #     except:
+        #         raise "Initial Value not found"
+        # elif type == "inviscid_conservation_sinflux":
+        #     try:
+        #         expr = sy.sympify(expr)
+        #         expr = expr.doit()
+        #         init_variable = float(expr.coeff(sy.cos(u) * sy.diff(u, x)))
+        #         fluxx = "sin"
+        #         viscous = False
+        #     except:
+        #         raise "Initial Value not found"
+        # elif type == "burgers":
+        #     try:
+        #         expr = sy.sympify(expr)
+        #         expr = expr.doit()
+        #         init_flux = expr.coeff(u * sy.diff(u, x))
+        #         init_diff = -expr.coeff(sy.diff(u, (x, 2)))
+        #         init_variable = np.array([float(init_flux), float(init_diff)])
+        #         fluxx = "quadratic"
+        #         viscous = True
+        #     except:
+        #         raise "Initial Value not found"
+        # elif type == "conservation_cubicflux":
+        #     try:
+        #         expr = sy.sympify(expr)
+        #         expr = expr.doit()
+        #         init_flux = expr.coeff(u ** 2 * sy.diff(u, x))
+        #         init_diff = -expr.coeff(sy.diff(u, (x, 2)))
+        #         init_variable = np.array([float(init_flux), float(init_diff)])
+        #         fluxx = "cubic"
+        #         viscous = True
+        #     except:
+        #         raise "Initial Value not found"
+        # elif type == "conservation_sinflux":
+        #     try:
+        #         expr = sy.sympify(expr)
+        #         expr = expr.doit()
+        #         init_flux = expr.coeff(sy.cos(u) * sy.diff(u, x))
+        #         init_diff = -expr.coeff(sy.diff(u, (x, 2)))
+        #         init_variable = np.array([float(init_flux), float(init_diff)])
+        #         fluxx = "sin"
+        #         viscous = True
+        #     except:
+        #         raise "Initial Value not found"
+        # else:
+        #     raise NotImplementedError
+        try:
+            init_diff = float(-expr.coeff(sy.diff(u, (x, 2))))
+            assert init_diff != 0
+            init_variable = np.array([init_flux,init_diff])
+            viscous = True
+        except:
+            init_variable = init_flux
+            viscous = False
+        return init_variable,fluxx, viscous
+
+    def refinement(self, expr, data_input,init_variable, fluxx, viscous ):
+        p = self.params
+        # expr, init_variable, fluxx, viscous = self.init_param(expr)
+        # Number of particles
+        M = 500
+        T = 10
+
+        obs_noise =  np.linalg.norm(data_input[0].cpu().numpy())/20
+
+        # STD of Process noise
+        process_noise = 0.00001
+
+        # Define the initial distribution of particles for alpha (uniform distribution)
+        def initial_distribution(init_alpha):
+            if not isinstance(init_alpha,np.ndarray):
+                init_alpha = np.array(init_alpha, dtype=float)
+
+            return np.random.uniform(0.9 * init_alpha, 1.1 * init_alpha, (M,) + init_alpha.shape)
+
+        # Propagate particles with noise
+        def propagate_particles(particles, process_noise):
+            noise = np.random.normal(0, process_noise, particles.shape)
+            return particles + noise
+
+        # Resample particles based on their weights using systematic resampling
+        def resample(particles, weights):
+            positions = (np.arange(M) + np.random.uniform(0, 1)) / M
+            indexes = np.zeros(M, 'i')
+            cumulative_sum = np.cumsum(weights)
+            i, j = 0, 0
+            while i < M:
+                if positions[i] < cumulative_sum[j]:
+                    indexes[i] = j
+                    i += 1
+                else:
+                    j += 1
+            return particles[indexes]
+
+        def compute_weights(particles, observation, u_prev):
+            weights = np.zeros(M)
+            for i in range(M):
+                u_pred = self.update(p, u_prev, particles[i], fluxx=fluxx,viscous=viscous)
+                weights[i] = np.exp(-0.5 * np.sum((observation - u_pred) ** 2) / obs_noise ** 2)
+            return weights / np.sum(weights)
+
+        particles = initial_distribution(init_variable)
+
+        observations = data_input[:, :,0].cpu().numpy()
+
+        for t in range(T):
+            particles = propagate_particles(particles, process_noise)
+
+            weights = compute_weights(particles, observations[t+1,:],observations[t, :])
+
+            particles = resample(particles, weights)
+
+        # Estimate the state
+        refined_value = np.mean(particles,axis=0)
+        refined_exp = self.generated_symbol(p,  observations[0,:], refined_value, fluxx=fluxx, viscous=viscous)
+        if viscous:
+            expr_new = expr.subs(init_variable[0], refined_value[0])
+            expr_new = expr_new.subs(init_variable[1],refined_value[1])
+            return expr_new,refined_exp
+        else:
+            return expr.subs(init_variable, refined_value),refined_exp
+
+    def update(self, p, u_prev, particles, fluxx="quadratic", viscous=True):
+        GivenIC = u_prev.reshape(1,p.data.x_num)
+        if viscous:
+            eps =particles[1] * np.pi
+            k = particles[0]
+        else:
+            eps = 0
+            k = particles
+        uu = burgers_f(
+            p.data.x_range[1],
+            p.data.x_range[0],
+            p.data.x_num,
+            0.0,
+            (p.data.t_range[1] / p.data.t_num) * p.input_step,
+            p.data.t_range[1] / p.data.t_num,
+            p.input_step + 1,
+            # p.data.t_num,
+            0.4,
+            1,
+            1,
+            np.random.randint(100000),
+            eps,
+            k,
+            viscous=viscous,
+            fluxx=fluxx,
+            GivenIC=GivenIC,
+            mode="periodic"
+        )
+        return  np.array(uu[0,0,-1, :])
+
+    def generated_symbol(self, p, IC, param, fluxx="quadratic", viscous=True):
+        GivenIC = IC.reshape(1,p.data.x_num)
+        if viscous:
+            eps =param[1] * np.pi
+            k = param[0]
+        else:
+            eps = 0
+            k = param
+        uu = burgers_f(
+            p.data.x_range[1],
+            p.data.x_range[0],
+            p.data.x_num,
+           0.0,
+            p.data.t_range[1],
+            p.data.t_range[1] / p.data.t_num,
+            p.data.t_num,
+            0.4,
+            1,
+            1,
+            np.random.randint(100000),
+            eps,
+            k,
+            viscous=viscous,
+            fluxx=fluxx,
+            GivenIC=GivenIC,
+            mode="periodic"
+        )
+        output_start = self.params.input_len if  self.params.output_step == 1 else  self.params.input_len + 1
+        return  np.array(uu[0,0,output_start::self.params.output_step, :])

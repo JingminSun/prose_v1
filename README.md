@@ -1,4 +1,4 @@
-PROSE(1DPDE) version 1
+PROSE(1DPDE) version 1.0
 
 ## Data Generation: See detailed instruction in script/gen_data.sh
     bash scripts/gen_data.sh
@@ -10,9 +10,17 @@ and data will be stored in "your_directory/type_name/(type_name)_(IC_per_params)
                         and "your_directory/type_name/(type_name)_(IC_per_params)_(file_name)_data.h5" 
 
 
-## Run the code: Samples in scripts/run.sh
+## Run the code
+
+For test runs:
 
     bash scripts/run.sh
+
+For the code in the paper  [Time-Series Forecasting, Knowledge Distillation, and Refinement within a Multimodal PDE Foundation Model](https://arxiv.org/abs/2409.11609):
+    
+    bash scripts/sympy.sh
+
+
 ### Data
 
 Just specify your ``data.train_types`` and ``data.eval_types`` and if some specific_name needed, 
@@ -31,8 +39,32 @@ Note you may set ``model.data_decoder.full_tx=false`` to run with a larger batch
 
 ### Modes
 
-In data configuration, you can enable/disable the skeleton tree input by ``data.use_skeleton=True/False``
+In data configuration, you can enable/disable the skeleton tree input by ``symbol.use_skeleton=True/False``
 
 In model configuration, you can include/exclude the text (symbol) encoder/decoder by ``model.no_text_encoder=True/False`` 
 and ``model.no_text_decoder=True/False`` , the default setting is text encoder but no text decoder.
 
+## Citation
+
+If you find this code useful, please consider citing:
+
+```
+@article{sun2024foundation,
+      title={Towards a Foundation Model for Partial Differential Equation: Multi-Operator Learning and Extrapolation}, 
+      author={Jingmin Sun and Yuxuan Liu and Zecheng Zhang and Hayden Schaeffer},
+      year={2024},
+      eprint={2404.12355},
+      archivePrefix={arXiv},
+      primaryClass={cs.LG}
+}
+
+
+@article{jollie2024time,
+      title={Time-Series Forecasting, Knowledge Distillation, and Refinement within a Multimodal PDE Foundation Model}, 
+      author={Derek Jollie and Jingmin Sun and Zecheng Zhang and Hayden Schaeffer},
+      year={2024},
+      eprint={2409.11609},
+      archivePrefix={arXiv},
+      primaryClass={cs.LG}
+}
+```
