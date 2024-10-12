@@ -146,7 +146,9 @@ def main(params: DictConfig):
         logger.info(s_mem)
         exit()
 
-    for epoch in range(params.max_epoch):
+    # for epoch in range(params.max_epoch):
+
+    while trainer.epoch < params.max_epoch:
         logger.info(f"============ Starting epoch {trainer.epoch} ... ============")
 
         trainer.inner_epoch = 0

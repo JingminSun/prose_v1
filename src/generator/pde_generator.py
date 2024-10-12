@@ -697,26 +697,14 @@ class PDEGenerator(Generator):
                     if_norm=True,
                 )
             )
-        # slope = (y_0s[:,-1] - y_0s[:,0])/self.x_range
-        #
-        # y_0s -= np.outer(slope,self.x_grid.flatten() )
-        #
-        # y_0s = (y_0s - np.min(y_0s, axis=1).reshape(-1, 1)) / (
-        #             np.max(y_0s, axis=1).reshape(-1, 1) - np.min(y_0s, axis=1).reshape(-1, 1))
-
         for i in range(num_initial_points * 10):
 
             psi_t0 = np.zeros(self.x_grid.flatten().shape)
             try:
-                # center = self.refine_floats(rng.uniform(*center_range, (1,)))[0]
-                # std = self.refine_floats(rng.uniform(*std_range, (1,)))[0]
-                # psi_0 = np.exp(-((self.x_grid.flatten() - center ) ** 2) / (
-                #             2 * std ** 2))
-                # slope = (psi_0[-1] - psi_0[0])/self.x_range
-                # psi_0 -= slope * self.x_grid.flatten()# Gaussian packet at t=0
                 psi_0 = y_0s[i, :]
                 y = [psi_0]
                 upr = psi_0
+                # u = (2 * (1 - alpha) * psi_0  + alpha * (np.roll(psi_0, -1) + np.roll(psi_0, 1)) - beta * psi_0)/2
                 u = psi_0 + dt_this * psi_t0
                 t_current = dt_this
 
@@ -792,9 +780,9 @@ class PDEGenerator(Generator):
 
         dt_this = self.dt / (coeff * 100)
 
+        alpha = (dt_this ** 2) / (self.dx ** 2)
         def update(u, upr, t_curr, t_save):
             while t_curr < t_save:
-                alpha = (dt_this**2) / (self.dx**2)
                 u_new = 2 * u - upr + alpha * (np.roll(u, -1) - 2 * u + np.roll(u, 1)) - (dt_this**2) * c * np.sin(u)
                 upr = u
                 u = u_new
@@ -838,7 +826,8 @@ class PDEGenerator(Generator):
                 psi_0 = y_0s[i, :]
                 y = [psi_0]
                 upr = psi_0
-                u = psi_0 + dt_this * psi_t0
+                u =  (2 * psi_0 + alpha * (np.roll(psi_0, -1) - 2 * psi_0 + np.roll(psi_0, 1)) - (dt_this**2) * c * np.sin(psi_0))/2
+                # u = psi_0 + dt_this * psi_t0
                 t_current = dt_this
                 for n in range(1, self.t_num):
                     t_save = self.t_eval[n] / coeff
