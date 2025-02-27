@@ -16,11 +16,11 @@ for dataset in "${datasets[@]}"; do
     file_name=ood1.11.2
     rm $directory/$dataset/${dataset}_${ICs_equation}_${file_name}.prefix
     rm $directory/$dataset/${dataset}_${ICs_equation}_${file_name}_data.h5
-    CUDA_VISIBLE_DEVICES=$GPU python3 src/data_gen_pde.py num_workers=10  IC_per_param=$ICs_equation data.param_range_gamma=0.05  data.param_range_shift=1.15 data.types=${dataset}  size=5120 directory=$directory file_name=${file_name}
+    CUDA_VISIBLE_DEVICES=$GPU python3 src/data_gen_pde.py num_workers=10  IC_per_param=$ICs_equation data.param_range_gamma=0.05  data.param_range_shift=0.15 data.types=${dataset}  size=5120 directory=$directory file_name=${file_name}
     file_name=ood0.80.9
     rm $directory/$dataset/${dataset}_${ICs_equation}_${file_name}.prefix
     rm $directory/$dataset/${dataset}_${ICs_equation}_${file_name}_data.h5
-    CUDA_VISIBLE_DEVICES=$GPU python3 src/data_gen_pde.py num_workers=10  IC_per_param=$ICs_equation data.param_range_gamma=0.05  data.param_range_shift=0.85 data.types=${dataset}  size=5120 directory=$directory file_name=${file_name}
+    CUDA_VISIBLE_DEVICES=$GPU python3 src/data_gen_pde.py num_workers=10  IC_per_param=$ICs_equation data.param_range_gamma=0.05  data.param_range_shift=-0.15 data.types=${dataset}  size=5120 directory=$directory file_name=${file_name}
 
 #    file_name=0to3
 #    rm $directory/$dataset/${dataset}_${ICs_equation}_${file_name}.prefix
