@@ -52,13 +52,19 @@ and ``model.no_text_decoder=True/False`` , the default setting is text encoder b
 If you find this code useful, please consider citing:
 
 ```
-@article{sun2024foundation,
-      title={Towards a Foundation Model for Partial Differential Equation: Multi-Operator Learning and Extrapolation}, 
-      author={Jingmin Sun and Yuxuan Liu and Zecheng Zhang and Hayden Schaeffer},
-      year={2024},
-      eprint={2404.12355},
-      archivePrefix={arXiv},
-      primaryClass={cs.LG}
+@article{sun2024towards,
+  title = {Towards a foundation model for partial differential equations: Multioperator learning and extrapolation},
+  author = {Sun, Jingmin and Liu, Yuxuan and Zhang, Zecheng and Schaeffer, Hayden},
+  journal = {Phys. Rev. E},
+  volume = {111},
+  issue = {3},
+  pages = {035304},
+  numpages = {18},
+  year = {2025},
+  month = {Mar},
+  publisher = {American Physical Society},
+  doi = {10.1103/PhysRevE.111.035304},
+  url = {https://link.aps.org/doi/10.1103/PhysRevE.111.035304}
 }
 
 
