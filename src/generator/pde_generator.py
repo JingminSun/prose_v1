@@ -889,7 +889,7 @@ class PDEGenerator(Generator):
             name = "tree_sympy" if self.params.symbol.all_type else "tre"
             item[name] = str(cahnhillard_1D_expr)
         if not self.params.symbol.use_sympy or self.params.symbol.all_type:
-            op_list = [["add", "add", "add"]]
+            op_list = [["add", "sub", "sub"]]
             term_list = [
                 [
                     self.mul_terms([str(coeff), "ut_0"]),
@@ -917,10 +917,10 @@ class PDEGenerator(Generator):
                 d2u_dx2[0] = (u[-1] - 2 * u[0] + u[1]) / dx**2
                 d2u_dx2[-1] = (u[-2] - 2 * u[-1] + u[0]) / dx**2
 
-                f = u**3 - u
+                # f = u**3 - u
                 fu = 3 * u**2 - 1
 
-                d2u_dx2af = eps**2 * d2u_dx2 + fu
+                d2u_dx2af = -eps**2 * d2u_dx2 + fu
 
                 for i in range(1, self.x_num - 1):
                     rhs[i] = (d2u_dx2af[i - 1] - 2 * d2u_dx2af[i] + d2u_dx2af[i + 1]) / dx**2
@@ -929,7 +929,7 @@ class PDEGenerator(Generator):
                 rhs[0] = (d2u_dx2af[-1] - 2 * d2u_dx2af[0] + d2u_dx2af[1]) / dx**2
                 rhs[-1] = (d2u_dx2af[-2] - 2 * d2u_dx2af[-1] + d2u_dx2af[0]) / dx**2
 
-                du_dt = -d2u_dx2af
+                du_dt = rhs
                 return du_dt
 
             return f
