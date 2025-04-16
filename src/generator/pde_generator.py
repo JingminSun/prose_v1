@@ -21,7 +21,7 @@ logger = getLogger()
 
 from symbol_utils.node_utils import Node, NodeList
 from .ode_generator import Generator
-
+from numpy.fft import rfft, irfft, rfftfreq
 
 class PDEGenerator(Generator):
     def __init__(self, params, float_encoder, equation_encoder, t_span, t_eval, x_grid, dt, dx):
@@ -868,75 +868,189 @@ class PDEGenerator(Generator):
             ]
             return op_list, term_list
 
-    def generate_cahnhilliard_1D(self, rng, ICs=None,coeff = None):
-        eps = 0.01
+    # def generate_cahnhilliard_1D(self, rng, ICs=None,coeff = None):
+    #     eps = 0.01
+    #     tf = self.tfinals["cahnhilliard_1D"]
+    #     p = self.params
+    #     coeff = self.t_range / tf
+    #     eps_range = self.get_sample_range(eps)
+    #
+    #     item = {"type": "cahnhilliard_1D"}
+    #
+    #     eps = self.refine_floats(rng.uniform(*eps_range, (1,)))[0]
+    #
+    #     if self.params.symbol.use_sympy or self.params.symbol.all_type:
+    #         x, t = sy.symbols('x t')
+    #         u = sy.Function('u_0')(x, t)
+    #
+    #         cahnhillard_1D_expr = coeff * sy.diff(u, t) + eps ** 2 * sy.diff(u,
+    #                                                                          (x, 4)) + 6 * sy.diff(
+    #             (u * sy.diff(u, x)), x)
+    #         name = "tree_sympy" if self.params.symbol.all_type else "tree"
+    #         item[name] = str(cahnhillard_1D_expr)
+    #     if not self.params.symbol.use_sympy or self.params.symbol.all_type:
+    #         op_list = [["add", "sub", "sub"]]
+    #         term_list = [
+    #             [
+    #                 self.mul_terms([str(coeff), "ut_0"]),
+    #                 self.mul_terms([str(eps ** 2), "uxxxx_0"]),
+    #                 self.mul_terms([str(6), "ux_0", "ux_0"]),
+    #                 self.mul_terms([str(6), "u_0", "uxx_0"]),
+    #             ]
+    #         ]
+    #         if self.params.symbol.swapping:
+    #             op_list, term_list =  self.full_tree_with_swapping_term(op_list,term_list,rng)
+    #         item["tree"] = self.tree_from_list(op_list, term_list)
+    #
+    #     #
+    #     def f_closure(eps):
+    #
+    #         def f(t, u):
+    #             d2u_dx2 = np.zeros_like(u)
+    #             rhs = np.zeros_like(u)
+    #             dx = self.x_range / self.x_num
+    #             # Compute second spatial derivatives using central differences
+    #             for i in range(1, self.x_num - 1):
+    #                 d2u_dx2[i] = (u[i - 1] - 2 * u[i] + u[i + 1]) / dx**2
+    #
+    #             # Periodic boundary conditions
+    #             d2u_dx2[0] = (u[-1] - 2 * u[0] + u[1]) / dx**2
+    #             d2u_dx2[-1] = (u[-2] - 2 * u[-1] + u[0]) / dx**2
+    #
+    #             f = u**3 - u
+    #             fu = 3 * u**2 - 1
+    #
+    #             d2u_dx2af = -eps**2 * d2u_dx2 #+ fu
+    #
+    #             for i in range(1, self.x_num - 1):
+    #                 rhs[i] = (d2u_dx2af[i - 1] - 2 * d2u_dx2af[i] + d2u_dx2af[i + 1]) / dx**2
+    #
+    #             # Periodic boundary conditions
+    #             rhs[0] = (d2u_dx2af[-1] - 2 * d2u_dx2af[0] + d2u_dx2af[1]) / dx**2
+    #             rhs[-1] = (d2u_dx2af[-2] - 2 * d2u_dx2af[-1] + d2u_dx2af[0]) / dx**2
+    #
+    #             du_dt = rhs
+    #             return du_dt
+    #
+    #         return f
+    #
+    #     item["func"] = f_closure(eps)
+    #
+    #     # ODE solve
+    #     num_initial_points = self.ICs_per_equation
+    #     if ICs is not None:
+    #         y_0s = np.array(ICs)
+    #     elif self.IC_types == "train":
+    #         y_0s = np.array(
+    #             init_multi(
+    #                 self.x_grid.flatten(),
+    #                 numbers=num_initial_points * 10,
+    #                 k_tot=2,
+    #                 init_key=rng.randint(100000),
+    #                 if_norm=True,
+    #             )
+    #         )
+    #     else:
+    #         y_0s = np.array(
+    #             generate_gaussian_process_jax(
+    #                 self.x_grid.flatten(),
+    #                 init_key=rng.randint(100000),
+    #                 num=num_initial_points * 10,
+    #                 kernel=rbf_kernel_jax,
+    #                 k_sigma=1,
+    #                 k_l=0.2,
+    #             )
+    #         )
+    #     res = []
+    #     fun = item["func"]
+    #     for i in range(num_initial_points * 10):
+    #         y_0 = y_0s[i, :]
+    #         try:
+    #             sol = solve_ivp(
+    #                 fun,
+    #                 [t / coeff for t in self.t_span],
+    #                 y_0,
+    #                 method="BDF",
+    #                 t_eval=self.t_eval / coeff,
+    #                 rtol=self.rtol,
+    #                 atol=self.atol,
+    #             )
+    #
+    #             if (sol.status) == 0 and (np.max(np.abs(sol.y)) < 1e3):
+    #                 res.append(torch.from_numpy(sol.y.transpose().astype(np.single)).unsqueeze(-1))
+    #                 if len(res) >= num_initial_points:
+    #                     break
+    #         except Exception as e:
+    #             pass
+    #     item["data"] = res
+    #     sns.heatmap(np.asarray(res[0])[:, :, 0])
+    #     plt.xlabel('x')
+    #     plt.ylabel('t')
+    #     plt.title('CH Equation with diffusion coefficient = '+ str(eps))
+    #     plt.savefig('checkpoint/aaaa5.jpg')
+    #     plt.show()
+    #     item["t_grid"] = self.t_eval
+    #     item["t_span"] = self.t_span
+    #     item["x_grid"] = self.x_grid
+    #
+    #
+    #     return item
+    def generate_cahnhilliard_1D(self, rng, ICs=None, coeff=None):
+        eps = 0.001 # coeff of u_xxxx
+        a = 0.006 # coeff of u ** 3 - u
         tf = self.tfinals["cahnhilliard_1D"]
         p = self.params
         coeff = self.t_range / tf
         eps_range = self.get_sample_range(eps)
+        a_range = self.get_sample_range(a)
 
         item = {"type": "cahnhilliard_1D"}
 
         eps = self.refine_floats(rng.uniform(*eps_range, (1,)))[0]
-
+        a = self.refine_floats(rng.uniform(*a_range, (1,)))[0]
         if self.params.symbol.use_sympy or self.params.symbol.all_type:
             x, t = sy.symbols('x t')
             u = sy.Function('u_0')(x, t)
-
-            cahnhillard_1D_expr = coeff * sy.diff(u, t) + eps ** 2 * sy.diff(u,
-                                                                             (x, 4)) + 6 * sy.diff(
-                (u * sy.diff(u, x)), x)
-            name = "tree_sympy" if self.params.symbol.all_type else "tre"
+            cahnhillard_1D_expr = coeff * sy.diff(u, t) + eps ** 2 * sy.diff(u, (x, 4)) -  a * sy.diff(u ** 3 - u, (x,2))
+            name = "tree_sympy" if self.params.symbol.all_type else "tree"
             item[name] = str(cahnhillard_1D_expr)
         if not self.params.symbol.use_sympy or self.params.symbol.all_type:
-            op_list = [["add", "sub", "sub"]]
+            op_list = [["add", "sub", "sub","add"]]
             term_list = [
                 [
                     self.mul_terms([str(coeff), "ut_0"]),
                     self.mul_terms([str(eps ** 2), "uxxxx_0"]),
-                    self.mul_terms([str(6), "ux_0", "ux_0"]),
-                    self.mul_terms([str(6), "u_0", "uxx_0"]),
+                    self.mul_terms([str(6 * a), "u_0", "ux_0", "ux_0"]),
+                    self.mul_terms([str(3 * a), "u_0", "u_0", "uxx_0"]),
+                    self.mul_terms([str(a), "uxx_0"]),
                 ]
             ]
             if self.params.symbol.swapping:
-                op_list, term_list =  self.full_tree_with_swapping_term(op_list,term_list,rng)
+                op_list, term_list = self.full_tree_with_swapping_term(op_list, term_list, rng)
             item["tree"] = self.tree_from_list(op_list, term_list)
 
-        #
         def f_closure(eps):
+            N = self.x_num
+            dx = self.dx
+            k = 2 * np.pi * rfftfreq(N, dx)  # Wavenumbers for real FFT
 
             def f(t, u):
-                d2u_dx2 = np.zeros_like(u)
-                rhs = np.zeros_like(u)
-                dx = self.x_range / self.x_num
-                # Compute second spatial derivatives using central differences
-                for i in range(1, self.x_num - 1):
-                    d2u_dx2[i] = (u[i - 1] - 2 * u[i] + u[i + 1]) / dx**2
+                # Compute FFT of u and nonlinear term
+                u_hat = rfft(u)
+                f_nl = u ** 3 - u
+                f_hat = rfft(f_nl)
 
-                # Periodic boundary conditions
-                d2u_dx2[0] = (u[-1] - 2 * u[0] + u[1]) / dx**2
-                d2u_dx2[-1] = (u[-2] - 2 * u[-1] + u[0]) / dx**2
+                # Spectral calculation of RHS
+                rhs_hat = -(eps ** 2 * (k ** 4) * u_hat) - a * (k ** 2 * f_hat)
+                du_dt = irfft(rhs_hat, n=N).real  # Ensure real output
 
-                # f = u**3 - u
-                fu = 3 * u**2 - 1
-
-                d2u_dx2af = -eps**2 * d2u_dx2 + fu
-
-                for i in range(1, self.x_num - 1):
-                    rhs[i] = (d2u_dx2af[i - 1] - 2 * d2u_dx2af[i] + d2u_dx2af[i + 1]) / dx**2
-
-                # Periodic boundary conditions
-                rhs[0] = (d2u_dx2af[-1] - 2 * d2u_dx2af[0] + d2u_dx2af[1]) / dx**2
-                rhs[-1] = (d2u_dx2af[-2] - 2 * d2u_dx2af[-1] + d2u_dx2af[0]) / dx**2
-
-                du_dt = rhs
                 return du_dt
 
             return f
 
         item["func"] = f_closure(eps)
 
-        # ODE solve
+        # Generate initial conditions and solve (unchanged)
         num_initial_points = self.ICs_per_equation
         if ICs is not None:
             y_0s = np.array(ICs)
@@ -961,6 +1075,7 @@ class PDEGenerator(Generator):
                     k_l=0.2,
                 )
             )
+
         res = []
         fun = item["func"]
         for i in range(num_initial_points * 10):
@@ -970,26 +1085,30 @@ class PDEGenerator(Generator):
                     fun,
                     [t / coeff for t in self.t_span],
                     y_0,
-                    method="BDF",
+                    method="RK45",
                     t_eval=self.t_eval / coeff,
                     rtol=self.rtol,
                     atol=self.atol,
                 )
-
                 if (sol.status) == 0 and (np.max(np.abs(sol.y)) < 1e3):
                     res.append(torch.from_numpy(sol.y.transpose().astype(np.single)).unsqueeze(-1))
+                    # sns.heatmap(np.asarray(res[i])[:, :, 0])
+                    # plt.xlabel('x')
+                    # plt.ylabel('t')
+                    # plt.title('CH Equation with diffusion coefficient = {:.3e}, {:.3e}'.format(eps,a))
+                    # plt.savefig('checkpoint/aaaa{:}.jpg'.format(i))
+                    # plt.show()
                     if len(res) >= num_initial_points:
                         break
             except Exception as e:
                 pass
+
         item["data"] = res
         item["t_grid"] = self.t_eval
         item["t_span"] = self.t_span
         item["x_grid"] = self.x_grid
 
-
         return item
-
     def kdv_tree_list(self):
         if self.params.symbol.use_sympy:
             ph = sy.symbols(self.ph)
