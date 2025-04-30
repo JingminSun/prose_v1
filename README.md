@@ -52,7 +52,7 @@ and ``model.no_text_decoder=True/False`` , the default setting is text encoder b
 If you find this code useful, please consider citing:
 
 ```
-@article{sun2024towards,
+@article{sun2025towards,
   title = {Towards a foundation model for partial differential equations: Multioperator learning and extrapolation},
   author = {Sun, Jingmin and Liu, Yuxuan and Zhang, Zecheng and Schaeffer, Hayden},
   journal = {Phys. Rev. E},
@@ -68,12 +68,15 @@ If you find this code useful, please consider citing:
 }
 
 
-@article{jollie2024time,
-      title={Time-Series Forecasting, Knowledge Distillation, and Refinement within a Multimodal PDE Foundation Model}, 
-      author={Derek Jollie and Jingmin Sun and Zecheng Zhang and Hayden Schaeffer},
-      year={2024},
-      eprint={2409.11609},
-      archivePrefix={arXiv},
-      primaryClass={cs.LG}
+@article{jollie2025time,
+	author  = {Derek  Jollie and Jingmin  Sun and Zecheng  Zhang and Hayden Schaeffer},
+	title   = {TIME-SERIES FORECASTING AND REFINEMENT WITHIN A MULTIMODAL PDE FOUNDATION MODEL},
+	journal = {Journal of Machine Learning for Modeling and Computing},
+	issn    = {2689-3967},
+	year    = {2025},
+	volume  = {6},
+	number  = {2},
+	pages   = {77--89}
 }
+
 ```
