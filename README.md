@@ -1,14 +1,30 @@
-PROSE(1DPDE) version 1.0
+# PROSE-PDE V1.0
 
-## Data Generation: See detailed instruction in script/gen_data.sh
+## Data Generation: See detailed instruction in [gen_data.sh](script/gen_data.sh)
     bash scripts/gen_data.sh
-The data is by default saving to "your_directory/type_name/(type_name)_(IC_per_params).prefix" for symbol part 
-                        and "your_directory/type_name/(type_name)_(IC_per_params)_data.h5" for data part
 
-If some specific data need to be generated, change "file_name=specific_name", samples are given in script/gen_data.sh 
-and data will be stored in "your_directory/type_name/(type_name)_(IC_per_params)_(file_name).prefix" 
-                        and "your_directory/type_name/(type_name)_(IC_per_params)_(file_name)_data.h5" 
 
+### Data output Structure
+
+#### Default Output
+
+By default, the generated data is saved in the `Dir/type_name/` directory with the following structure:
+
+| Component | File Path Pattern |
+|-----------|-------------------|
+| **Symbols** | `Dir/type_name/(type_name)_(IC_per_params).prefix` |
+| **Data** | `Dir/type_name/(type_name)_(IC_per_params)_data.h5` |
+
+#### Custom Output
+
+To generate specific datasets, modify the `file_name` variable in [`gen_data.sh`](script/gen_data.sh). Examples are provided within the script.
+
+When using a custom `file_name`, the output structure becomes:
+
+| Component | File Path Pattern |
+|-----------|-------------------|
+| **Symbols** | `Dir/type_name/(type_name)_(IC_per_params)_(file_name).prefix` |
+| **Data** | `Dir/type_name/(type_name)_(IC_per_params)_(file_name)_data.h5` |
 
 ## Run the code
 
